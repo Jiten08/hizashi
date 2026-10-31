@@ -88,3 +88,37 @@ def simulate(s_limit: float, b_limit: float, max_rounds: int = config.MAX_ROUNDS
             return h
         h.bids.append(bid_price(r, b_limit, **kw))
     return h
+
+
+def buyer_decide(
+    ask_price_val: float,
+    r: int,
+    limit: float,
+    remaining_need: float,
+    is_open: bool = True,
+    same_transformer: bool = True,
+    **kw,
+) -> tuple[Literal["accept", "counter", "refuse"], float, str]:
+    """Pure decision for buyer answering an ask in round r."""
+    if not is_open:
+        return ("refuse", 0.0, "block not OPEN")
+    if not same_transformer:
+        return ("refuse", 0.0, "different transformer")
+    if remaining_need < config.MIN_TRADE_KWH:
+        return ("refuse", 0.0, "no buy need left")
+    if buyer_accepts(ask_price_val, r, limit, **kw):
+        return ("accept", ask_price_val, "")
+    return ("counter", bid_price(r, limit, **kw), "")
+
+
+def seller_decide(
+    bid_price_val: float,
+    r: int,
+    limit: float,
+    **kw,
+) -> Literal["accept", "next"]:
+    """Pure decision for seller receiving a bid in round r."""
+    if seller_accepts(bid_price_val, r + 1, limit, **kw):
+        return "accept"
+    return "next"
+
