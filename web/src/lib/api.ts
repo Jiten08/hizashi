@@ -25,7 +25,7 @@ export const api = {
     req("POST", `/api/approvals/${approvalId}`, { decision, channel: "app" }),
   verifyLedger: () => req<{ ok: boolean; broken_at?: number; entries?: number }>("GET", "/api/ledger/verify"),
   ledger: (house?: House) => req<LedgerEntry[]>("GET", `/api/ledger${house ? `?house=${house}` : ""}`),
-  connect: () => req<{ hub: string | null; houses: { house: House; label: string; payload: { hub: string | null; house: House } }[] }>("GET", "/api/connect"),
+  connect: () => req<{ hub: string | null; houses: { house: House; label: string; url: string | null }[] }>("GET", "/api/connect"),
 };
 
 export function wsUrl(query: string): string {

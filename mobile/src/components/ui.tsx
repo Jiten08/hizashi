@@ -1,108 +1,111 @@
-// iOS-style building blocks: large-title screens, inset grouped sections, rows, buttons,
-// rings, steppers and a segmented control. Colours and type come from lib/theme.
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import type { ComponentProps, ReactNode } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, type ViewStyle } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Circle } from "react-native-svg";
-import { C, R, T } from "../lib/theme";
+// iOS-style building blocks for the phone PWA: large-title screens, inset grouped sections,
+// rows, buttons, rings, steppers, a segmented control and a switch.
+import type { ReactNode } from "react";
 
-export type IconName = ComponentProps<typeof Ionicons>["name"];
+const PATHS: Record<string, ReactNode> = {
+  sun: (<><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" /></>),
+  home: (<><path d="M3.5 10.5 12 3.5l8.5 7" /><path d="M5.5 9v11h13V9" /></>),
+  check: <path d="M5 12.5 10 17.5 19 7" />,
+  checkCircle: (<><circle cx="12" cy="12" r="9" /><path d="m8 12.5 3 3 5-6" /></>),
+  sliders: <path d="M4 20v-6M4 10V4M12 20v-8M12 8V4M20 20v-4M20 12V4M1.5 14h5M9.5 8h5M17.5 16h5" />,
+  clock: (<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),
+  hand: <path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8a8 8 0 0 0 16 0v-3a2 2 0 0 0-4 0" />,
+  shield: (<><path d="M12 21.5s8-3.8 8-9.8V5l-8-3-8 3v6.7c0 6 8 9.8 8 9.8z" /><path d="m8.5 12 2.5 2.5 4.5-5" /></>),
+  swap: <path d="M7 7h12l-3-3M17 17H5l3 3" />,
+  trend: <path d="M3 17 9 11l4 4 8-8M15 7h6v6" />,
+  ribbon: (<><circle cx="12" cy="9" r="5.5" /><path d="m8.5 13.5-2 7.5 5.5-3 5.5 3-2-7.5" /></>),
+  cash: (<><rect x="2.5" y="6" width="19" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /></>),
+  link: <path d="M9.5 16.5H7a4.5 4.5 0 0 1 0-9h2.5M14.5 7.5H17a4.5 4.5 0 0 1 0 9h-2.5M8.5 12h7" />,
+  chevron: <path d="m9 5 7 7-7 7" />,
+  back: <path d="m15 5-7 7 7 7" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  minus: <path d="M5 12h14" />,
+  doc: (<><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></>),
+};
+export type IconName = keyof typeof PATHS;
 
-export function Screen({ title, subtitle, right, children, onRefresh, refreshing = false }: {
-  title: string; subtitle?: ReactNode; right?: ReactNode; children: ReactNode; onRefresh?: () => void; refreshing?: boolean;
-}) {
-  const insets = useSafeAreaInsets();
+export function Icon({ name, className = "h-5 w-5", strokeWidth = 1.9 }: { name: IconName; className?: string; strokeWidth?: number }) {
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: C.bg }}
-      contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 32, paddingHorizontal: 16 }}
-      refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}
-    >
-      <View style={s.titleRow}>
-        <View style={{ flex: 1 }}>
-          {subtitle ? <Text style={[T.footnote, { fontWeight: "600" }]}>{subtitle}</Text> : null}
-          <Text style={T.largeTitle}>{title}</Text>
-        </View>
-        {right}
-      </View>
-      {children}
-    </ScrollView>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round"
+      strokeLinejoin="round" className={className} aria-hidden="true">{PATHS[name]}</svg>
   );
-}
-
-export function Section({ header, footer, children, style }: { header?: string; footer?: string; children: ReactNode; style?: ViewStyle }) {
-  return (
-    <View style={[{ marginTop: 22 }, style]}>
-      {header ? <Text style={[T.sectionHeader, { marginLeft: 16, marginBottom: 7 }]}>{header}</Text> : null}
-      <View style={s.group}>{children}</View>
-      {footer ? <Text style={[T.footnote, { marginHorizontal: 16, marginTop: 7 }]}>{footer}</Text> : null}
-    </View>
-  );
-}
-
-export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
-  return <View style={[s.group, { padding: 16 }, style]}>{children}</View>;
 }
 
 export function IconTile({ name, bg, size = 29 }: { name: IconName; bg: string; size?: number }) {
   return (
-    <View style={{ width: size, height: size, borderRadius: size * 0.24, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}>
-      <Ionicons name={name} size={size * 0.62} color="#fff" />
-    </View>
+    <span className="inline-flex shrink-0 items-center justify-center text-white"
+      style={{ width: size, height: size, borderRadius: size * 0.24, background: bg }}>
+      <Icon name={name} className="h-[62%] w-[62%]" strokeWidth={2.2} />
+    </span>
   );
 }
 
-export function Row({ icon, iconBg = C.orange, title, subtitle, value, valueColor, onPress, chevron, last, accessory }: {
-  icon?: IconName; iconBg?: string; title: string; subtitle?: string; value?: string; valueColor?: string;
-  onPress?: () => void; chevron?: boolean; last?: boolean; accessory?: ReactNode;
+export function Screen({ title, subtitle, children }: { title: string; subtitle?: ReactNode; children: ReactNode }) {
+  return (
+    <main className="mx-auto max-w-[560px] px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-[calc(14px+env(safe-area-inset-top))]">
+      {subtitle ? <p className="t-footnote font-semibold">{subtitle}</p> : null}
+      <h1 className="t-large mb-1">{title}</h1>
+      {children}
+    </main>
+  );
+}
+
+export function Section({ header, footer, children, className = "" }: { header?: string; footer?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <section className={`mt-[22px] ${className}`}>
+      {header ? <h2 className="t-section mb-[7px] ml-4">{header}</h2> : null}
+      <div className="overflow-hidden rounded-xl bg-card">{children}</div>
+      {footer ? <p className="t-footnote mx-4 mt-[7px]">{footer}</p> : null}
+    </section>
+  );
+}
+
+export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`rounded-xl bg-card p-4 ${className}`}>{children}</div>;
+}
+
+export function Row({ icon, iconBg = "var(--color-orange)", title, subtitle, value, valueClass = "", onClick, chevron, last, accessory }: {
+  icon?: IconName; iconBg?: string; title: ReactNode; subtitle?: ReactNode; value?: ReactNode; valueClass?: string;
+  onClick?: () => void; chevron?: boolean; last?: boolean; accessory?: ReactNode;
 }) {
-  const body = (
-    <View style={s.row}>
-      {icon ? <View style={{ marginRight: 12 }}><IconTile name={icon} bg={iconBg} /></View> : null}
-      <View style={[s.rowMain, !last && s.rowSep]}>
-        <View style={{ flex: 1, paddingVertical: subtitle ? 9 : 12 }}>
-          <Text style={T.body} numberOfLines={2}>{title}</Text>
-          {subtitle ? <Text style={[T.footnote, { marginTop: 1 }]} numberOfLines={2}>{subtitle}</Text> : null}
-        </View>
-        {value ? <Text style={[T.body, T.number, { color: valueColor ?? C.label2, marginLeft: 8 }]}>{value}</Text> : null}
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag onClick={onClick} className={`flex w-full items-center pl-4 text-left ${onClick ? "active:bg-[#e5e5ea]" : ""}`}>
+      {icon ? <span className="mr-3"><IconTile name={icon} bg={iconBg} /></span> : null}
+      <span className={`flex min-h-11 flex-1 items-center pr-4 ${last ? "" : "hairline"}`}>
+        <span className={`min-w-0 flex-1 ${subtitle ? "py-[9px]" : "py-[11px]"}`}>
+          <span className="t-body block">{title}</span>
+          {subtitle ? <span className="t-footnote mt-px block whitespace-pre-line">{subtitle}</span> : null}
+        </span>
+        {value !== undefined ? <span className={`t-body num ml-2 text-right text-label-2 ${valueClass}`}>{value}</span> : null}
         {accessory}
-        {chevron ? <Ionicons name="chevron-forward" size={17} color={C.label3} style={{ marginLeft: 6 }} /> : null}
-      </View>
-    </View>
+        {chevron ? <Icon name="chevron" className="ml-1.5 h-4 w-4 text-label-3" strokeWidth={2.4} /> : null}
+      </span>
+    </Tag>
   );
-  return onPress ? <Pressable onPress={onPress} style={({ pressed }) => pressed && { backgroundColor: "#E5E5EA" }}>{body}</Pressable> : body;
 }
 
-export function Button({ title, onPress, kind = "filled", color = C.orange, icon, disabled, busy, style }: {
-  title: string; onPress: () => void; kind?: "filled" | "tinted" | "gray" | "plain"; color?: string;
-  icon?: IconName; disabled?: boolean; busy?: boolean; style?: ViewStyle;
+type Kind = "filled" | "tinted" | "gray" | "plain" | "danger";
+export function Button({ children, onClick, kind = "filled", disabled, busy, className = "" }: {
+  children: ReactNode; onClick?: () => void; kind?: Kind; disabled?: boolean; busy?: boolean; className?: string;
 }) {
-  const bg = kind === "filled" ? color : kind === "tinted" ? `${color}22` : kind === "gray" ? C.fill2 : "transparent";
-  const fg = kind === "filled" ? "#fff" : kind === "gray" ? C.label : color;
+  const k = {
+    filled: "bg-orange text-white",
+    tinted: "bg-orange-soft text-orange-ink",
+    gray: "bg-fill text-label",
+    plain: "bg-transparent text-orange",
+    danger: "bg-transparent text-red",
+  }[kind];
   return (
-    <Pressable
-      disabled={disabled || busy}
-      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); onPress(); }}
-      style={({ pressed }) => [s.button, { backgroundColor: bg, opacity: disabled ? 0.4 : pressed ? 0.75 : 1 }, style]}
-    >
-      {busy ? <ActivityIndicator color={fg} /> : (
-        <>
-          {icon ? <Ionicons name={icon} size={18} color={fg} style={{ marginRight: 6 }} /> : null}
-          <Text style={[T.headline, { color: fg }]}>{title}</Text>
-        </>
-      )}
-    </Pressable>
+    <button onClick={onClick} disabled={disabled || busy}
+      className={`t-headline inline-flex h-[50px] items-center justify-center gap-1.5 rounded-[14px] px-4 transition active:opacity-70 disabled:opacity-40 ${k} ${className}`}>
+      {busy ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : children}
+    </button>
   );
 }
 
-export function Pill({ text, color = C.label2, bg = C.fill2 }: { text: string; color?: string; bg?: string }) {
-  return (
-    <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
-      <Text style={{ fontSize: 12, fontWeight: "600", color }}>{text}</Text>
-    </View>
-  );
+export function Pill({ children, className = "bg-fill text-label-2" }: { children: ReactNode; className?: string }) {
+  return <span className={`inline-flex items-center rounded-full px-2 py-[3px] text-xs font-semibold ${className}`}>{children}</span>;
 }
 
 /** Apple Fitness-style ring. progress 0..1 (clamped). */
@@ -111,70 +114,65 @@ export function Ring({ size, stroke, progress, color, children }: { size: number
   const c = 2 * Math.PI * r;
   const p = Math.max(0, Math.min(1, progress));
   return (
-    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={`${color}2E`} strokeWidth={stroke} fill="none" />
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeLinecap="round"
-          strokeDasharray={`${c * p} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-      </Svg>
+    <span className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="absolute inset-0 -rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeOpacity={0.18} strokeWidth={stroke} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeLinecap="round"
+          strokeDasharray={`${c * p} ${c}`} style={{ transition: "stroke-dasharray 0.6s ease" }} />
+      </svg>
       {children}
-    </View>
+    </span>
   );
 }
 
-export function Stepper({ label, hint, value, onChange, step, min = 0, max = 999, format }: {
-  label: string; hint?: string; value: number; onChange: (v: number) => void; step: number; min?: number; max?: number; format: (v: number) => string;
+export function Stepper({ label, hint, value, onChange, step, min = 0, max = 999, format, last }: {
+  label: string; hint?: string; value: number; onChange: (v: number) => void; step: number; min?: number; max?: number;
+  format: (v: number) => string; last?: boolean;
 }) {
   const bump = (d: number) => {
     const v = Math.round((value + d) * 100) / 100;
-    if (v >= min && v <= max) { Haptics.selectionAsync().catch(() => {}); onChange(v); }
+    if (v >= min - 1e-9 && v <= max + 1e-9) onChange(v);
   };
   return (
-    <View style={[s.row, { paddingVertical: 10 }]}>
-      <View style={{ flex: 1, paddingRight: 8 }}>
-        <Text style={T.body}>{label}</Text>
-        {hint ? <Text style={T.footnote}>{hint}</Text> : null}
-      </View>
-      <Text style={[T.headline, T.number, { minWidth: 64, textAlign: "right", marginRight: 10 }]}>{format(value)}</Text>
-      <View style={s.stepper}>
-        <Pressable onPress={() => bump(-step)} hitSlop={6} style={s.stepBtn}><Ionicons name="remove" size={20} color={C.label} /></Pressable>
-        <View style={{ width: StyleSheet.hairlineWidth, height: 18, backgroundColor: C.label3 }} />
-        <Pressable onPress={() => bump(step)} hitSlop={6} style={s.stepBtn}><Ionicons name="add" size={20} color={C.label} /></Pressable>
-      </View>
-    </View>
+    <div className="flex items-center pl-4">
+      <div className={`flex min-h-11 flex-1 items-center py-2.5 pr-4 ${last ? "" : "hairline"}`}>
+        <div className="min-w-0 flex-1 pr-2">
+          <p className="t-body">{label}</p>
+          {hint ? <p className="t-footnote">{hint}</p> : null}
+        </div>
+        <span className="t-headline num mr-2.5 min-w-16 text-right">{format(value)}</span>
+        <span className="flex h-8 items-center rounded-[9px] bg-fill">
+          <button aria-label={`Less ${label}`} onClick={() => bump(-step)} className="flex h-8 w-[46px] items-center justify-center active:opacity-50"><Icon name="minus" className="h-5 w-5" strokeWidth={2.2} /></button>
+          <span className="h-[18px] w-px bg-label-3" />
+          <button aria-label={`More ${label}`} onClick={() => bump(step)} className="flex h-8 w-[46px] items-center justify-center active:opacity-50"><Icon name="plus" className="h-5 w-5" strokeWidth={2.2} /></button>
+        </span>
+      </div>
+    </div>
   );
 }
 
 export function Segmented<T extends string>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
   return (
-    <View style={s.segment}>
-      {options.map((o) => {
-        const on = o.value === value;
-        return (
-          <Pressable key={o.value} onPress={() => { Haptics.selectionAsync().catch(() => {}); onChange(o.value); }}
-            style={[s.segmentItem, on && s.segmentOn]}>
-            <Text style={{ fontSize: 13, fontWeight: on ? "600" : "500", color: C.label }}>{o.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
+    <div className="flex rounded-[9px] bg-fill p-0.5">
+      {options.map((o) => (
+        <button key={o.value} onClick={() => onChange(o.value)}
+          className={`h-[30px] flex-1 rounded-[7px] text-[13px] transition ${o.value === value ? "bg-white font-semibold shadow-[0_2px_4px_rgba(0,0,0,0.12)]" : "font-medium"}`}>
+          {o.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
-export function Separator() {
-  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.sep, marginLeft: 16 }} />;
+export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)}
+      className={`relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors ${on ? "bg-green" : "bg-[#e9e9ea]"}`}>
+      <span className={`absolute top-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.16)] transition-all ${on ? "left-[22px]" : "left-[2px]"}`} />
+    </button>
+  );
 }
 
-export const s = StyleSheet.create({
-  titleRow: { flexDirection: "row", alignItems: "flex-end", marginBottom: 4 },
-  group: { backgroundColor: C.card, borderRadius: R.card, overflow: "hidden" },
-  row: { flexDirection: "row", alignItems: "center", paddingLeft: 16, minHeight: 44 },
-  rowMain: { flex: 1, flexDirection: "row", alignItems: "center", paddingRight: 16 },
-  rowSep: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.sep },
-  button: { height: 50, borderRadius: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
-  stepper: { flexDirection: "row", alignItems: "center", backgroundColor: C.fill2, borderRadius: 9, height: 32 },
-  stepBtn: { width: 46, height: 32, alignItems: "center", justifyContent: "center" },
-  segment: { flexDirection: "row", backgroundColor: C.fill2, borderRadius: 9, padding: 2 },
-  segmentItem: { flex: 1, height: 30, alignItems: "center", justifyContent: "center", borderRadius: 7 },
-  segmentOn: { backgroundColor: "#fff", shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-});
+export function Spinner() {
+  return <span className="inline-block h-6 w-6 animate-spin rounded-full border-[2.5px] border-label-3 border-t-label-2" />;
+}

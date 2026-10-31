@@ -29,7 +29,8 @@ PROFILES_DIR = DATA_DIR / "profiles"
 WEATHER_DIR = DATA_DIR / "weather"
 KEYS_DIR = ROOT / "keys"
 DB_PATH = ROOT / "hub" / "hizashi.db"
-WEB_DIST = ROOT / "web" / "dist"
+WEB_DIST = ROOT / "web" / "dist"          # street dashboard (laptop), served at /
+MOBILE_DIST = ROOT / "mobile" / "dist"    # owner phone app (PWA), served at /app/
 
 # Time
 TZ_NAME = "Asia/Kolkata"

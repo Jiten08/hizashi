@@ -1,17 +1,15 @@
-// Live hub state for one house: GET /api/state, then /ws events through one reducer per type.
-// Tiny external store (useSyncExternalStore) so screens re-render on every applied event.
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useSyncExternalStore } from "react";
-import { Api } from "./api";
+// Live hub state for this phone's house: GET /api/state, then /ws events through one reducer
+// per type; reconnects on its own. Reducers copy what the hub says, they never compute money.
+import { useEffect } from "react";
+import { create } from "zustand";
+import { api, wsUrl } from "./api";
 import { EV, type House, type HubEvent, type Snapshot } from "./types";
-
-export interface Connection { hub: string; house: House }
 
 export interface HubState extends Snapshot {
   loaded: boolean;
   connected: boolean;
-  conn: Connection | null;
-  ready: boolean;              // saved connection read from storage
+  failures: number;
+  lastError: string | null;
 }
 
 const empty: Snapshot = {
@@ -22,27 +20,12 @@ const empty: Snapshot = {
   live: {}, sim_events: [], blocked: [], auctions: {},
 };
 
-let state: HubState = { ...empty, loaded: false, connected: false, conn: null, ready: false };
-const listeners = new Set<() => void>();
-
-function set(patch: Partial<HubState>) {
-  state = { ...state, ...patch };
-  listeners.forEach((l) => l());
-}
-
-export function useHub(): HubState {
-  return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, () => state);
-}
-
-export const getHub = () => state;
-export const api = () => new Api(state.conn?.hub ?? "");
-
-type Reducer = (s: HubState, e: HubEvent) => Partial<HubState>;
-
 const DAY_RESET: Partial<HubState> = {
   blocks: {}, contracts: [], settlements: [], negotiations: {}, approvals: [], flags: [], blocked: [],
   savings: {}, plans: {}, live: {}, sim_events: [], auctions: {}, outage: null,
 };
+
+type Reducer = (s: HubState, e: HubEvent) => Partial<HubState>;
 
 const reducers: Record<string, Reducer> = {
   [EV.CLOCK_TICK]: (s, e) => ({
@@ -90,65 +73,79 @@ function upsertApproval(s: HubState, e: HubEvent): Partial<HubState> {
   return { approvals: [...s.approvals.filter((x) => x.approval_id !== a.approval_id), a] };
 }
 
-// --- connection ------------------------------------------------------------------------
+export const useHubStore = create<HubState>(() => ({ ...empty, loaded: false, connected: false, failures: 0, lastError: null }));
 
-const KEY = "hizashi.connection";
-let ws: WebSocket | null = null;
-let timer: ReturnType<typeof setTimeout> | undefined;
-let generation = 0;
+const set = (patch: Partial<HubState>) => useHubStore.setState(patch);
 
-export async function loadConnection(): Promise<void> {
+/** Keep a live connection for `house` while mounted. */
+export function useHubConnection(house: House | null) {
+  useEffect(() => {
+    if (!house) return;
+    let stopped = false;
+    let ws: WebSocket | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const retry = (err?: unknown) => {
+      if (stopped) return;
+      const s = useHubStore.getState();
+      set({ connected: false, failures: s.failures + 1, lastError: err ? String((err as Error).message ?? err) : s.lastError });
+      timer = setTimeout(start, 1500);
+    };
+
+    async function start() {
+      try {
+        const snap = await Promise.race([
+          api.state(),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("no answer in 8 s")), 8000)),
+        ]);
+        if (stopped) return;
+        set({ ...empty, ...snap, loaded: true, failures: 0, lastError: null });
+      } catch (e) {
+        retry(e);
+        return;
+      }
+      ws = new WebSocket(wsUrl(house!));
+      ws.onopen = () => set({ connected: true });
+      ws.onmessage = (m) => {
+        const e = JSON.parse(m.data) as HubEvent;
+        const patch = reducers[e.type]?.(useHubStore.getState(), e);
+        if (patch) set(patch);
+        if (e.type === EV.CLOCK_TICK && e.data.reset) api.state().then((s) => set({ ...empty, ...s, loaded: true })).catch(() => {});
+      };
+      ws.onclose = () => retry();
+    }
+
+    // Back from the background (phones suspend sockets): reconnect at once.
+    const wake = () => { if (document.visibilityState === "visible" && ws?.readyState !== WebSocket.OPEN) { clearTimeout(timer); ws?.close(); start(); } };
+    document.addEventListener("visibilitychange", wake);
+    start();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", wake);
+      if (ws) { ws.onclose = null; ws.close(); }
+    };
+  }, [house]);
+}
+
+// --- which house this phone belongs to ---------------------------------------------------
+const KEY = "hizashi.house";
+const HOUSES: House[] = ["h12", "h14", "h16", "h18"];
+
+export function savedHouse(): House | null {
+  const fromUrl = new URLSearchParams(location.search).get("house");
+  if (fromUrl && (HOUSES as string[]).includes(fromUrl)) {
+    try { localStorage.setItem(KEY, fromUrl); } catch { /* private mode */ }
+    return fromUrl as House;
+  }
   try {
-    const raw = await AsyncStorage.getItem(KEY);
-    const conn = raw ? (JSON.parse(raw) as Connection) : null;
-    set({ conn, ready: true });
-    if (conn) start();
+    const v = localStorage.getItem(KEY);
+    return v && (HOUSES as string[]).includes(v) ? (v as House) : null;
   } catch {
-    set({ ready: true });
+    return null;
   }
 }
 
-export async function connect(conn: Connection): Promise<void> {
-  await AsyncStorage.setItem(KEY, JSON.stringify(conn));
-  set({ ...empty, conn, loaded: false, connected: false });
-  start();
-}
-
-export async function disconnect(): Promise<void> {
-  stop();
-  await AsyncStorage.removeItem(KEY);
-  set({ ...empty, conn: null, loaded: false, connected: false });
-}
-
-function stop() {
-  generation++;
-  clearTimeout(timer);
-  if (ws) { ws.onclose = null; ws.close(); ws = null; }
-}
-
-function start() {
-  stop();
-  const gen = generation;
-  const conn = state.conn;
-  if (!conn) return;
-  const client = new Api(conn.hub);
-  const retry = () => {
-    if (gen !== generation) return;
-    set({ connected: false });
-    timer = setTimeout(start, 1500);
-  };
-  client.state().then((snap) => {
-    if (gen !== generation) return;
-    set({ ...empty, ...snap, loaded: true });
-    ws = new WebSocket(client.wsUrl(conn.house));
-    ws.onopen = () => set({ connected: true });
-    ws.onmessage = (m) => {
-      const e = JSON.parse(String(m.data)) as HubEvent;
-      const patch = reducers[e.type]?.(state, e);
-      if (patch) set(patch);
-      if (e.type === EV.CLOCK_TICK && e.data.reset) client.state().then((s) => set({ ...empty, ...s, loaded: true })).catch(() => {});
-    };
-    ws.onclose = retry;
-    ws.onerror = () => ws?.close();
-  }).catch(retry);
+export function saveHouse(h: House | null) {
+  try { if (h) localStorage.setItem(KEY, h); else localStorage.removeItem(KEY); } catch { /* private mode */ }
 }

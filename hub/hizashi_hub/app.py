@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 
 from hizashi_shared import config, street
 from hizashi_shared.models import Mandate
@@ -31,7 +31,8 @@ from .api import webhooks
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("hizashi.hub")
 
-RESERVED_PREFIXES = ("api/", "ws", "webhooks/", "docs", "openapi.json")
+RESERVED_PREFIXES = ("api/", "ws", "webhooks/", "docs", "openapi.json", "app/")
+MEDIA_TYPES = {".webmanifest": "application/manifest+json", ".js": "text/javascript"}
 
 
 def load_mandates(conn) -> dict[str, Mandate]:
@@ -74,16 +75,54 @@ app.include_router(webhooks.router)
 app.include_router(ws.router)
 
 
-@app.get("/{path:path}", include_in_schema=False)
-def spa(path: str):
-    if path.startswith(RESERVED_PREFIXES):
-        raise HTTPException(404)
-    dist = config.WEB_DIST.resolve()
+def _serve(dist, path: str, missing: str):
+    """A file from a Vite build, else its index.html (SPA fallback)."""
+    dist = dist.resolve()
     if path:
         f = (dist / path).resolve()
         if f.is_file() and f.is_relative_to(dist):
-            return FileResponse(f)
+            headers = {"Cache-Control": "no-cache"} if f.name in ("sw.js", "index.html", "manifest.webmanifest") else None
+            return FileResponse(f, media_type=MEDIA_TYPES.get(f.suffix), headers=headers)
     index = dist / "index.html"
     if index.is_file():
-        return FileResponse(index)
-    return HTMLResponse("<h1>Hizashi hub</h1><p>web/dist not built: cd web && npm run build</p>")
+        return FileResponse(index, headers={"Cache-Control": "no-cache"})
+    return HTMLResponse(f"<h1>Hizashi hub</h1><p>{missing}</p>")
+
+
+# Earlier builds installed a service worker for the whole site (scope /). Phones keep using it,
+# and it keeps serving the old cached app, until /sw.js changes. This one removes itself and its caches
+# and reloads open pages, so those phones get the current dashboard and /app/ on their next visit.
+RETIRE_SW = """
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    for (const key of await caches.keys()) await caches.delete(key);
+    await self.registration.unregister();
+    for (const client of await self.clients.matchAll({ type: 'window' })) client.navigate(client.url);
+  })());
+});
+"""
+
+
+@app.get("/sw.js", include_in_schema=False)
+def retire_root_service_worker():
+    return Response(RETIRE_SW, media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/app", include_in_schema=False)
+def phone_app_root():
+    return RedirectResponse("/app/")
+
+
+@app.get("/app/{path:path}", include_in_schema=False)
+def phone_app(path: str):
+    """The owner's phone app (mobile/, a PWA)."""
+    return _serve(config.MOBILE_DIST, path, "mobile/dist not built: cd mobile && npm run build")
+
+
+@app.get("/{path:path}", include_in_schema=False)
+def dashboard(path: str):
+    """The street dashboard (web/), for the laptop."""
+    if path.startswith(RESERVED_PREFIXES):
+        raise HTTPException(404)
+    return _serve(config.WEB_DIST, path, "web/dist not built: cd web && npm run build")
