@@ -36,6 +36,12 @@ def test_phone_app_at_app(client):
     assert sw.headers["cache-control"] == "no-cache"
 
 
+def test_root_sw_retires_old_workers(client):
+    r = client.get("/sw.js")
+    assert r.headers["content-type"].startswith("text/javascript")
+    assert "unregister" in r.text and r.headers["cache-control"] == "no-cache"
+
+
 def test_api_and_ws_not_swallowed(client):
     assert client.get("/api/nope").status_code == 404
     assert "dashboard" in client.get("/application-notes").text  # only app/ is reserved
