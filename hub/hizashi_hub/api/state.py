@@ -18,9 +18,9 @@ def get_state() -> dict:
 
 @router.get("/connect")
 def get_connect() -> dict:
-    """What the dashboard puts in each house's QR code for the phone app."""
+    """What the dashboard puts in each house's QR code: a link to the phone app for that house."""
     hub = tunnel.public_url()
-    return {"hub": hub, "houses": [{"house": h, "label": info.label, "payload": {"hub": hub, "house": h}}
+    return {"hub": hub, "houses": [{"house": h, "label": info.label, "url": f"{hub}/app/?house={h}" if hub else None}
                                    for h, info in hub_state.get().houses.items()]}
 
 
