@@ -7,6 +7,7 @@ dependencies = [
   "a2a-sdk[http-server]==1.2.1",
   "pynacl>=1.5", "pvlib>=0.11", "pandas>=2.2", "numpy>=1.26",
   "python-dotenv>=1.0", "websockets>=12",
+  "tzdata>=2024.1",                 # Windows has no system time-zone database for Asia/Kolkata
   "twilio>=9", "google-genai>=1.0", "groq>=0.11",
 ]
 [project.optional-dependencies]
