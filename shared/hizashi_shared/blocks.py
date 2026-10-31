@@ -4,7 +4,9 @@ from datetime import date, datetime, timedelta
 from . import config
 from .models import BlockRef
 
-TRADABLE = range(24, 76)    # 06:00–18:45; other blocks never open
+# 06:30–17:45: the blocks with any clear-sky output in Bengaluru on SIM_DAY (sunrise ~06:13,
+# sunset ~17:53). Other blocks never open. tests/test_solar_window.py keeps the two in step.
+TRADABLE = range(26, 71)
 DAY_START = config.DAY_START
 DAY_END = config.DAY_END
 _BLOCK = timedelta(minutes=config.BLOCK_MINUTES)

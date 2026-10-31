@@ -20,6 +20,7 @@ class HubState:
         self.houses = houses
         self.mandates = mandates
         self.speed = speed
+        self.weather_source: str | None = None
         self.reset()
 
     def reset(self) -> None:
@@ -36,8 +37,11 @@ class HubState:
         self.approvals: list[dict] = []
         self.flags: list[dict] = []
         self.outage: dict | None = None
-        self.weather_source: str | None = None
         self.recent: list[dict] = []
+        self.live: dict[str, dict] = {}              # house -> latest {solar_kw, use_kw, ts}
+        self.sim_events: list[dict] = []             # console cloud / ac / guests / away / outage
+        self.blocked: list[dict] = []                # wallet refusals, newest last
+        self.auctions: dict[str, dict] = {}          # block key -> market.cleared data
 
     def apply(self, e: Event) -> None:
         d = e.data
@@ -66,7 +70,23 @@ class HubState:
             if all(x.get("contract_id") != c.get("contract_id") for x in self.contracts):
                 self.contracts.append(c)
         elif e.type == ev.SETTLEMENT_DONE:
-            self.settlements.append(d)
+            s = d.get("settlement", {})
+            if all(x.get("contract_id") != s.get("contract_id") for x in self.settlements):
+                self.settlements.append(s)
+            for c in self.contracts:
+                if c.get("contract_id") == s.get("contract_id"):
+                    c["settled"] = True
+        elif e.type == ev.METER_READING and e.house:
+            self.live[e.house] = {"solar_kw": d.get("solar_kw", 0), "use_kw": d.get("use_kw", 0),
+                                  "ts": e.sim_time.isoformat(), "outage": d.get("outage", False)}
+        elif e.type == ev.SIM_EVENT:
+            self.sim_events.append(d.get("event", {}))
+        elif e.type == ev.WALLET_BLOCKED:
+            self.blocked = (self.blocked + [{"house": e.house, "sim_time": e.sim_time.isoformat(), **d}])[-50:]
+        elif e.type == ev.MARKET_CLEARED:
+            self.auctions[d.get("block", "")] = d
+        elif e.type == ev.HOUSE_UPDATED and e.house:
+            self.houses[e.house] = HouseInfo.model_validate(d["house"])
         elif e.type == ev.SAVINGS_UPDATED and e.house:
             self.savings[e.house] = d
         elif e.type in (ev.APPROVAL_REQUESTED, ev.APPROVAL_RESOLVED):
@@ -99,6 +119,10 @@ class HubState:
             "flags": self.flags,
             "outage": self.outage,
             "weather_source": self.weather_source,
+            "live": self.live,
+            "sim_events": self.sim_events,
+            "blocked": self.blocked,
+            "auctions": self.auctions,
             "recent_events": self.recent,
         }
 

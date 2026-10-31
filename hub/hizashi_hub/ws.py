@@ -6,8 +6,8 @@
 
 Owners get events for their house or house=None. Street/console get everything.
 Screens get each house's meter readings at most once per simulated 5 minutes.
-Agents get clock.tick, block.state, market.cleared, approval.resolved and
-console.command for their house, and their own meter.reading.
+Agents get clock.tick, block.state, market.cleared, house.updated and mandate.updated,
+plus approval.resolved, console.command, meter.reading and settlement.done for their house.
 """
 import logging
 from datetime import datetime, timedelta
@@ -25,8 +25,8 @@ router = APIRouter()
 
 ROLES = ("owner", "street", "console", "agent")
 SCREEN_METER_EVERY = timedelta(minutes=5)
-AGENT_GLOBAL = {ev.CLOCK_TICK, ev.BLOCK_STATE, ev.MARKET_CLEARED}
-AGENT_SCOPED = {ev.APPROVAL_RESOLVED, ev.CONSOLE_COMMAND, ev.METER_READING}
+AGENT_GLOBAL = {ev.CLOCK_TICK, ev.BLOCK_STATE, ev.MARKET_CLEARED, ev.HOUSE_UPDATED, ev.MANDATE_UPDATED}
+AGENT_SCOPED = {ev.APPROVAL_RESOLVED, ev.CONSOLE_COMMAND, ev.METER_READING, ev.SETTLEMENT_DONE}
 
 
 class Filter:

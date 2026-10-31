@@ -57,6 +57,17 @@ BUYER_OPEN_PRICE = _f("BUYER_OPEN_PRICE", 4.00)
 MAX_ROUNDS = _i("MAX_ROUNDS", 6)
 CONCESSION_BETA = _f("CONCESSION_BETA", 1.0)
 EXPECTED_P2P_PRICE = _f("EXPECTED_P2P_PRICE", 4.68)
+
+# BESCOM buyback for exported solar (KERC). PM Surya Ghar subsidised systems get a lower rate.
+BUYBACK_UNSUBSIDISED = _f("BUYBACK_UNSUBSIDISED", 3.89)
+BUYBACK_SUBSIDISED_2KW = _f("BUYBACK_SUBSIDISED_2KW", 1.96)    # up to 2 kW
+BUYBACK_SUBSIDISED = _f("BUYBACK_SUBSIDISED", 2.14)            # above 2 kW
+
+
+def buyback_rate(kwp: float, subsidised: bool) -> float:
+    if not subsidised:
+        return BUYBACK_UNSUBSIDISED
+    return BUYBACK_SUBSIDISED_2KW if kwp <= 2.0 else BUYBACK_SUBSIDISED
 NEGOTIATION_ROUND_DELAY_MS = _i("NEGOTIATION_ROUND_DELAY_MS", 700)
 
 # Network

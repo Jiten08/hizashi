@@ -1,5 +1,7 @@
 // Fetch helpers. Screens only send taps; the hub computes everything.
-import type { Snapshot } from "./types";
+import type {
+  ApprovalRow, House, LedgerEntry, Mandate, SetupBody, SetupResult, Snapshot, Tariffs,
+} from "./types";
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -7,7 +9,11 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}`);
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json()).detail ?? ""; } catch { /* not json */ }
+    throw new Error(detail || `${method} ${path} -> ${res.status}`);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -19,7 +25,12 @@ export const api = {
     req("POST", "/api/console/events", { type, house, minutes }),
   decide: (approvalId: string, decision: "approve" | "decline") =>
     req("POST", `/api/approvals/${approvalId}`, { decision, channel: "app" }),
-  verifyLedger: () => req<{ ok: boolean; broken_at?: number }>("GET", "/api/ledger/verify"),
+  verifyLedger: () => req<{ ok: boolean; broken_at?: number; entries?: number }>("GET", "/api/ledger/verify"),
+  ledger: (house?: House) => req<LedgerEntry[]>("GET", `/api/ledger${house ? `?house=${house}` : ""}`),
+  approvals: (house: House) => req<ApprovalRow[]>("GET", `/api/approvals?house=${house}`),
+  putMandate: (house: House, m: Mandate) => req<Mandate>("PUT", `/api/wallet/${house}/mandate`, m),
+  setup: (house: House, body: SetupBody) => req<SetupResult>("POST", `/api/houses/${house}/setup`, body),
+  tariffs: () => req<Tariffs>("GET", "/api/houses/tariffs"),
 };
 
 export function wsUrl(query: string): string {
@@ -42,3 +53,16 @@ export function blockLabel(index: number): string {
 }
 
 export const rupees = (x: number) => `₹${x.toFixed(2)}`;
+export const kwh = (x: number, d = 2) => `${x.toFixed(d)} kWh`;
+
+/** Block key "2026-10-31#48" -> index 48. */
+export const blockIndex = (key: string) => Number(key.split("#")[1]);
+
+/** Same key format as the hub: day#NN. */
+export const blockKey = (b: { day: string; index: number }) => `${b.day}#${String(b.index).padStart(2, "0")}`;
+
+/** "10:00–13:00" for a plan window. */
+export function windowLabel(first: number, last: number): string {
+  const f = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  return `${f(first * 15)}–${f(last * 15 + 15)}`;
+}

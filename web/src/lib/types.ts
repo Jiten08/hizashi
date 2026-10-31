@@ -19,6 +19,8 @@ export interface HouseInfo {
   agent_url: string;
   meter_pubkey: string | null;
   wallet_pubkey: string | null;
+  subsidized?: boolean | null;
+  onboarded?: boolean;
 }
 
 export interface Forecast {
@@ -44,7 +46,7 @@ export interface PlanWindow {
   plan_id: string; house: House; side: "buy" | "sell"; day: string;
   first_index: number; last_index: number;
   kwh: number; expected_price: number; expected_value: number;
-  status: "auto" | "pending" | "approved" | "declined";
+  status: "auto" | "pending" | "approved" | "declined" | "expired";
   signature: string | null;
 }
 
@@ -68,7 +70,7 @@ export interface MeterReading {
 }
 
 export interface Settlement {
-  contract_id: string; block: BlockRef;
+  contract_id: string; block: BlockRef; seller: House | null; buyer: House | null;
   contracted_kwh: number; delivered_kwh: number; shortfall_kwh: number;
   price: number; buyer_pays: number; seller_net: number; seller_penalty: number;
   fee: number; outage: boolean;
@@ -79,6 +81,38 @@ export interface Approval {
   summary: string; ref_id: string; code: string;
   status: "pending" | "approved" | "declined" | "expired";
   created_at: string;
+}
+
+export interface ApprovalRow extends Approval { channel: string | null; decided_at: string | null }
+
+export interface Savings {
+  house: House; day: string;
+  saved_today: number; projected_year: number; as_buyer: number; as_seller: number;
+  bought_kwh: number; paid: number; sold_kwh: number; delivered_kwh: number; shortfall_kwh: number;
+  earned: number; penalties: number; trades: number;
+}
+
+export interface Live { solar_kw: number; use_kw: number; ts: string; outage: boolean }
+
+export interface SimEvent { type: string; house: House | null; start: string; end: string }
+
+export interface LedgerEntry {
+  seq: number; ts: string; kind: string; ref_id: string;
+  payload: Record<string, any>; prev_hash: string; hash: string;
+}
+
+export interface Tariffs {
+  retail: number; fee: number; expected_p2p_price: number;
+  buyback: { unsubsidized: number; subsidized_upto_2kw: number; subsidized_above_2kw: number };
+}
+
+export interface SetupBody {
+  has_solar: boolean; kwp: number; facing: "south" | "east" | "west" | "north";
+  subsidized: boolean; metering: "net" | "gross"; preview?: boolean;
+}
+
+export interface SetupResult {
+  house: HouseInfo; clear_day_kwh: number; mandate: Mandate; tariffs: Tariffs; saved: boolean;
 }
 
 export interface HubEvent<T = Record<string, any>> {
@@ -100,14 +134,18 @@ export interface Snapshot {
   forecasts: Record<string, Forecast[]>;
   plans: Record<string, PlanWindow[]>;
   negotiations: Record<string, Offer[]>;
-  contracts: Contract[];
+  contracts: (Contract & { settled?: boolean })[];
   settlements: Settlement[];
-  savings: Record<string, Record<string, number>>;
+  savings: Record<string, Savings>;
   approvals: Approval[];
   flags: Record<string, any>[];
   outage: Record<string, any> | null;
   weather_source: string | null;
   recent_events: HubEvent[];
+  live: Record<string, Live>;
+  sim_events: SimEvent[];
+  blocked: (Record<string, any> & { house: House })[];
+  auctions: Record<string, Record<string, any>>;
 }
 
 export const EV = {
@@ -129,6 +167,8 @@ export const EV = {
   GRID_OUTAGE: "grid.outage",
   CONSOLE_COMMAND: "console.command",
   MANDATE_UPDATED: "mandate.updated",
+  SIM_EVENT: "sim.event",
+  HOUSE_UPDATED: "house.updated",
 } as const;
 
 export type Role = "owner" | "street" | "console";

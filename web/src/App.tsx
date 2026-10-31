@@ -1,3 +1,4 @@
+import { Toast } from "@heroui/react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Console from "./pages/Console";
 import Landing from "./pages/Landing";
@@ -8,6 +9,7 @@ import Street3D from "./pages/Street3D";
 export default function App() {
   return (
     <BrowserRouter>
+      <Toast.Provider placement="top" />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/h/:house" element={<Owner />} />

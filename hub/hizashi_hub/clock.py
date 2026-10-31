@@ -6,7 +6,7 @@ whose lifecycle state changed (section 6.2).
 
 Hooks for later tasks: `on_minute` callbacks (sim meters, R2.2) run before the tick is
 published; `on_block_state` callbacks (auction, settlement, R2.1/R2.3) run after each
-block.state event.
+block.state event; `on_reset` callbacks (clear the day's rows and sim events) run on reset.
 """
 import asyncio
 import logging
@@ -23,6 +23,7 @@ log = logging.getLogger("hizashi.clock")
 
 MinuteHook = Callable[[datetime], Awaitable[None] | None]
 BlockHook = Callable[[BlockRef, str | None, str], Awaitable[None] | None]
+ResetHook = Callable[[], Awaitable[None] | None]
 
 
 class SimClock:
@@ -34,6 +35,7 @@ class SimClock:
         self.running = False
         self.on_minute: list[MinuteHook] = []
         self.on_block_state: list[BlockHook] = []
+        self.on_reset: list[ResetHook] = []
         self._task: asyncio.Task | None = None
         self._wake = asyncio.Event()
 
@@ -64,6 +66,8 @@ class SimClock:
         await self.stop()
         self.now = blocks.day_start(self.day)
         self.block_states = {}
+        for hook in self.on_reset:
+            await _maybe_await(hook())
         self._publish_tick(reset=True)
         self.start()
 

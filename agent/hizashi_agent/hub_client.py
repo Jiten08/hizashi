@@ -171,7 +171,17 @@ class HubClient:
                 return {"status": "refused", "reason": str(e)}
 
     async def post_order(self, offer: Offer) -> dict:
-        raise NotImplementedError("TODO(R2.1, Anurag)")
+        """POST /api/market/orders with a wallet-signed Offer (to=None) -> queued | refused."""
+        if self.is_mock:
+            return {"status": "queued", "offer_id": offer.offer_id}
+        async with httpx.AsyncClient(timeout=5) as http:
+            try:
+                r = await http.post(f"{self.hub_url}/api/market/orders", headers=self._auth,
+                                    json={"offer": offer.model_dump(mode="json")})
+                return r.json()
+            except Exception as e:
+                log.warning("%s post_order error: %s", self.house, e)
+                return {"status": "refused", "reason": str(e)}
 
     async def report_guard(self, kind: str, detail: dict) -> dict:
         """POST /api/guard/report. Ignore 404 or 501 for now."""

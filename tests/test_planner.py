@@ -74,16 +74,15 @@ def test_plan_day_and_windows():
     fcs = [
         _make_fc("h12", idx, solar_p10=0.65, solar_p50=0.80, solar_p90=0.95,
                  use_p10=0.15, use_p50=0.20, use_p90=0.25)
-        for idx in range(24, 76)
+        for idx in range(26, 71)
     ]
     intents = plan_day(fcs, m)
-    assert len(intents) == 52  # blocks 24..75
-    assert all(intents[i][0] == "sell" for i in range(24, 76))
+    assert len(intents) == 45  # blocks 26..70
+    assert all(intents[i][0] == "sell" for i in range(26, 71))
 
     windows = plan_windows("h12", "2026-10-31", intents)
-    assert len(windows) == 1
-    w = windows[0]
-    assert w.first_index == 24
-    assert w.last_index == 75
-    assert w.side == "sell"
-    assert round(w.kwh, 2) == round(52 * 0.40, 2)
+    assert [(w.first_index, w.last_index) for w in windows] == [(26, 27), (28, 39), (40, 51), (52, 63), (64, 70)]
+    assert all(w.side == "sell" for w in windows)
+    assert round(sum(w.kwh for w in windows), 2) == round(45 * 0.40, 2)
+    w = windows[2]                                    # 10:00-13:00
+    assert w.kwh == 4.8 and w.expected_value == round(4.8 * 4.68, 2)

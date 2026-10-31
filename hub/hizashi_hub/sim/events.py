@@ -1,7 +1,13 @@
-"""Console events with start/end in sim time: cloud, outage, ac, guests, away."""
-from datetime import datetime
+"""Console events with start/end in sim time: cloud, outage, ac, guests, away.
+
+house=None means street-wide (an outage is always street-wide).
+"""
+from datetime import datetime, timedelta
 
 from pydantic import BaseModel
+
+CLOUD_FACTOR = 0.3
+DEFAULT_MINUTES = {"cloud": 45, "outage": 30, "ac": 120, "guests": 180, "away": 240}
 
 
 class SimEvent(BaseModel):
@@ -12,12 +18,31 @@ class SimEvent(BaseModel):
 
 
 class SimEvents:
-    def add(self, type_: str, house: str | None, start: datetime, minutes: int) -> SimEvent:
-        raise NotImplementedError("TODO(R2.7, Anurag)")
+    def __init__(self) -> None:
+        self.events: list[SimEvent] = []
+
+    def add(self, type_: str, house: str | None, start: datetime, minutes: int | None = None) -> SimEvent:
+        minutes = minutes or DEFAULT_MINUTES.get(type_, 30)
+        e = SimEvent(type=type_, house=None if type_ == "outage" else house,
+                     start=start, end=start + timedelta(minutes=minutes))
+        self.events.append(e)
+        return e
 
     def active(self, minute: datetime, type_: str | None = None, house: str | None = None) -> list[SimEvent]:
-        raise NotImplementedError("TODO(R2.7, Anurag)")
+        return [e for e in self.events
+                if e.start <= minute < e.end
+                and (type_ is None or e.type == type_)
+                and (house is None or e.house in (None, house))]
+
+    def overlapping(self, start: datetime, end: datetime, type_: str) -> list[SimEvent]:
+        return [e for e in self.events if e.type == type_ and e.start < end and start < e.end]
 
     def cloud_factor(self, house: str, minute: datetime) -> float:
         """0.3 under a console cloud, else 1.0."""
-        raise NotImplementedError("TODO(R2.7, Anurag)")
+        return CLOUD_FACTOR if self.active(minute, "cloud", house) else 1.0
+
+    def outage(self, minute: datetime) -> bool:
+        return bool(self.active(minute, "outage"))
+
+    def clear(self) -> None:
+        self.events = []

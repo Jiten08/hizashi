@@ -1,4 +1,4 @@
-"""Load private keys from keys/ (base64 seeds). Only wallet/ and market/booking.py call this."""
+"""Load private keys from keys/ (base64 seeds). Only wallet/, market/ and sim/meters.py call this."""
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,7 +20,7 @@ def wallet_key(house: str) -> SigningKey:
 
 
 def meter_key(house: str) -> SigningKey:
-    raise NotImplementedError("TODO(R2.2, Jiten)")
+    return _load(str(config.KEYS_DIR / f"{house}.meter.key"))
 
 
 def market_key() -> SigningKey:

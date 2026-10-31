@@ -5,8 +5,7 @@
  *
  * Event shape: { type, sim_time, house, data } — matches models.Event exactly.
  *
- * kW conversion note: meter.reading carries solar_wh / import_wh / export_wh
- * per simulated minute. UI converts: kW = wh * 60 / 1000.
+ * meter.reading carries the signed reading plus the hub's solar_kw / use_kw.
  *
  * Keep working to the end — this is the demo fallback if the hub is down.
  */
@@ -120,11 +119,9 @@ export function makeMockScript(house: string): { delay: number; event: HubEvent 
     data: {
       house: h,
       ts: iso(10, 8),
-      seq: 1,
-      solar_wh: 33,
-      import_wh: 0,
-      export_wh: 25,
-      signature: null,
+      reading: { house: h, ts: iso(10, 8), seq: 1, solar_wh: 33, import_wh: 0, export_wh: 25, signature: null },
+      solar_kw: 1.98,
+      use_kw: 0.48,
     },
   });
 
@@ -314,7 +311,10 @@ export function makeMockScript(house: string): { delay: number; event: HubEvent 
     sim_time: iso(10, 13),
     house: h,
     data: {
-      reason: "price exceeds max_buy_price",
+      reason: "Tried to buy at ₹40.00/unit. Your max is ₹5.50, so it was never sent.",
+      text: "BLOCKED · Tried to buy at ₹40.00/unit. Your max is ₹5.50, so it was never sent.",
+      check: 4,
+      owner_rule: true,
       offer: {
         offer_id: "off-bad-bid",
         negotiation_id: "neg-bad-001",

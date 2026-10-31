@@ -38,6 +38,8 @@ class HouseInfo(BaseModel):
     agent_url: str                  # "http://127.0.0.1:9012/"
     meter_pubkey: str | None = None
     wallet_pubkey: str | None = None
+    subsidized: bool | None = None  # PM Surya Ghar subsidy on the rooftop system; None if no solar
+    onboarded: bool = False         # the owner confirmed this setup in the app
 
 
 class Forecast(BaseModel):
@@ -74,7 +76,7 @@ class PlanWindow(BaseModel):        # a run of consecutive blocks with the same 
     kwh: float
     expected_price: float
     expected_value: float           # kwh * expected_price
-    status: Literal["auto", "pending", "approved", "declined"] = "auto"
+    status: Literal["auto", "pending", "approved", "declined", "expired"] = "auto"
     signature: str | None = None
 
 
@@ -122,6 +124,8 @@ class MeterReading(BaseModel):
 class Settlement(BaseModel):
     contract_id: str
     block: BlockRef
+    seller: House | None = None
+    buyer: House | None = None
     contracted_kwh: float
     delivered_kwh: float
     shortfall_kwh: float

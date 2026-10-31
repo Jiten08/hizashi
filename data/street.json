@@ -18,6 +18,8 @@
       "profile": "couple_away_day",
       "buyback_rate": 3.89,
       "metering": "net",
+      "subsidized": false,
+      "onboarded": false,
       "agent_url": "http://127.0.0.1:9012/",
       "meter_pubkey": "Pcy4E4fdQNFeL8xGHhp37skwu0vtghxco7YlIC/XyOE=",
       "wallet_pubkey": "kvOFtJoTcTLNloYFawku0bJkfqxB988Zjh6G+jpgHJc="
@@ -30,6 +32,8 @@
       "profile": "wfh_ac",
       "buyback_rate": null,
       "metering": "none",
+      "subsidized": null,
+      "onboarded": false,
       "agent_url": "http://127.0.0.1:9014/",
       "meter_pubkey": "GmVa7lbtBrUy27dP6ZS3oQzc+kfcvStjxg6wVC8SA74=",
       "wallet_pubkey": "ZjvuZoPajSSXKxI6JGayBi+MnnB11VIr7SL29JWpzrk="
@@ -47,6 +51,8 @@
       "profile": "family_medium",
       "buyback_rate": 2.14,
       "metering": "net",
+      "subsidized": true,
+      "onboarded": false,
       "agent_url": "http://127.0.0.1:9016/",
       "meter_pubkey": "5T2sn/XkIC7g/exS6DPk2W3iRQbqGYEaBH1JDUacFqU=",
       "wallet_pubkey": "DXYlhmZ+1//mFwqfYr2Xa24PH+E53/TjR+nW6YDHz9I="
@@ -64,6 +70,8 @@
       "profile": "heavy_appliances",
       "buyback_rate": 1.96,
       "metering": "net",
+      "subsidized": true,
+      "onboarded": false,
       "agent_url": "http://127.0.0.1:9018/",
       "meter_pubkey": "RRlJuGj7JMzZFjNXSuh+5SAhLVLNIbGStceU8oQlZlA=",
       "wallet_pubkey": "DaLGEtxcZqLC8/JQAcm/uS8uFMpKArUMpnUQptOm0gU="

@@ -3,6 +3,10 @@
 spare_low = solar_p10 - use_p90. If spare_low > MIN_TRADE_KWH -> sell min(spare_low, max_promise_kwh).
 Else if use_p10 > solar_p50 -> buy use_p10 - solar_p50.
 Else none.
+
+Plan windows group consecutive blocks with the same side, cut at the 3-hour slots
+07:00 / 10:00 / 13:00 / 16:00 so the owner approves the day in readable chunks
+("Buy 2.4 kWh from neighbours, 10:00–13:00, for about ₹11.23?").
 """
 from typing import Literal
 import uuid
@@ -11,6 +15,8 @@ from hizashi_shared import blocks, config
 from hizashi_shared.models import Forecast, Mandate, PlanWindow
 
 Intent = tuple[Literal["sell", "buy", "none"], float]
+
+SLOT_STARTS = {28, 40, 52, 64}      # 07:00, 10:00, 13:00, 16:00
 
 
 def plan_block(fc: Forecast, mandate: Mandate) -> Intent:
@@ -33,7 +39,7 @@ block_intent = plan_block
 
 
 def plan_day(forecasts: list[Forecast], mandate: Mandate) -> dict[int, Intent]:
-    """Determine intents for all TRADABLE blocks (24..75)."""
+    """Determine intents for all TRADABLE blocks (26..70)."""
     intents: dict[int, Intent] = {}
     fc_by_idx = {fc.block.index: fc for fc in forecasts}
     for idx in blocks.TRADABLE:
@@ -82,7 +88,7 @@ def plan_windows(house: str, day: str, intents: dict[int, Intent]) -> list[PlanW
     for idx in sorted_indices:
         side, kwh = intents[idx]
         if side in ("sell", "buy") and kwh > 0:
-            if current_side == side and idx == last_idx + 1:
+            if current_side == side and idx == last_idx + 1 and idx not in SLOT_STARTS:
                 last_idx = idx
                 total_kwh += kwh
             else:

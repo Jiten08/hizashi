@@ -42,7 +42,7 @@ def test_lifecycle_times():
 
 
 def test_open_time_clamped_to_day_start():
-    first = BlockRef(day=DAY, index=24)     # 06:00
+    first = BlockRef(day=DAY, index=24)     # 06:00 (not tradable, but the clamp still applies)
     assert blocks.open_time(first) == t(5)
     assert blocks.gate_close(first) == t(5)
     assert blocks.open_time(BlockRef(day=DAY, index=28)) == t(5)   # 07:00 - 120 = 05:00
@@ -50,10 +50,10 @@ def test_open_time_clamped_to_day_start():
 
 
 def test_tradable_range():
-    assert blocks.TRADABLE == range(24, 76)
-    assert blocks.label(BlockRef(day=DAY, index=24)) == "06:00–06:15"
-    assert blocks.label(BlockRef(day=DAY, index=75)) == "18:45–19:00"
-    assert len(blocks.tradable_blocks(DAY)) == 52
+    assert blocks.TRADABLE == range(26, 71)
+    assert blocks.label(BlockRef(day=DAY, index=26)) == "06:30–06:45"
+    assert blocks.label(BlockRef(day=DAY, index=70)) == "17:30–17:45"
+    assert len(blocks.tradable_blocks(DAY)) == 45
 
 
 def test_state_at_walks_the_lifecycle():
@@ -72,4 +72,5 @@ def test_state_at_walks_the_lifecycle():
 def test_all_blocks_settled_at_day_end():
     end = blocks.day_end(DAY)
     assert all(blocks.state_at(r, end) == "SETTLED" for r in blocks.tradable_blocks(DAY))
-    assert blocks.state_at(BlockRef(day=DAY, index=75), end - timedelta(minutes=1)) == "DELIVERING"
+    assert blocks.state_at(BlockRef(day=DAY, index=70), t(17, 44)) == "DELIVERING"
+    assert blocks.state_at(BlockRef(day=DAY, index=24), end) is None     # never opens

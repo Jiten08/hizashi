@@ -32,11 +32,13 @@ PROFILE_ANCHORS: dict[str, list[tuple[float, float]]] = {
 }
 
 
-def _house(id_: str, n: int, roof, profile: str, buyback: float | None, metering: str) -> dict:
+def _house(id_: str, n: int, roof, profile: str, buyback: float | None, metering: str,
+           subsidized: bool | None = None) -> dict:
     return {
         "id": id_, "label": f"House {n}", "transformer": "T1",
         "roof": None if roof is None else dict(zip(("kwp", "tilt", "azimuth", "inverter_kw"), roof)),
         "profile": profile, "buyback_rate": buyback, "metering": metering,
+        "subsidized": subsidized, "onboarded": False,
         "agent_url": f"http://127.0.0.1:{config.AGENT_PORTS[id_]}/",
         "meter_pubkey": None, "wallet_pubkey": None,
     }
@@ -44,10 +46,10 @@ def _house(id_: str, n: int, roof, profile: str, buyback: float | None, metering
 
 def default_street() -> dict:
     houses = [
-        _house("h12", 12, (5.0, 13, 180, 5.0), "couple_away_day", 3.89, "net"),
+        _house("h12", 12, (5.0, 13, 180, 5.0), "couple_away_day", 3.89, "net", False),
         _house("h14", 14, None, "wfh_ac", None, "none"),
-        _house("h16", 16, (3.0, 15, 90, 3.0), "family_medium", 2.14, "net"),
-        _house("h18", 18, (2.0, 13, 180, 2.0), "heavy_appliances", 1.96, "net"),
+        _house("h16", 16, (3.0, 15, 90, 3.0), "family_medium", 2.14, "net", True),
+        _house("h18", 18, (2.0, 13, 180, 2.0), "heavy_appliances", 1.96, "net", True),
     ]
     mandates = [
         Mandate(house="h12", min_sell_price=4.20, max_buy_price=5.50, daily_budget=50, max_promise_kwh=1.0, approve_above=10),

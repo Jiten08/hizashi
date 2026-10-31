@@ -12,6 +12,7 @@ from hizashi_shared import events as ev
 from hizashi_shared.models import Contract, Event, HouseInfo
 
 from .. import bus
+from ..settlement import ledger
 from ..wallet import keystore
 
 BlockStateFn = Callable[[str], str | None]
@@ -52,6 +53,13 @@ def book(conn: sqlite3.Connection, contract: Contract, street: dict[str, HouseIn
     if conn.execute("SELECT 1 FROM contracts WHERE contract_id = ?", (contract.contract_id,)).fetchone():
         raise BookingError("This contract is already booked.")
     contract = verify(contract, street, block_state_fn, now)
+    return record(conn, contract, now, market_key)
+
+
+def record(conn: sqlite3.Connection, contract: Contract, now: datetime,
+           market_key: SigningKey | None = None) -> Contract:
+    """Add market_sig, store (status 'booked'), ledger entry, publish contract.booked to both houses.
+    Shared by haggled bookings and auction matches."""
     key = market_key or keystore.market_key()
     booked = contract.model_copy(update={"market_sig": crypto.sign(contract, key)})
     conn.execute(
@@ -61,8 +69,8 @@ def book(conn: sqlite3.Connection, contract: Contract, street: dict[str, HouseIn
          booked.route, booked.model_dump_json()),
     )
     conn.commit()
-    # TODO(R2.4, Jiten): ledger entry "contract booked"
     data = {"contract": json.loads(booked.model_dump_json())}
+    ledger.append(conn, now.isoformat(), "contract.booked", booked.contract_id, data["contract"])
     for house in (booked.seller, booked.buyer):
         bus.publish(Event(type=ev.CONTRACT_BOOKED, sim_time=now, house=house, data=data))
     return booked

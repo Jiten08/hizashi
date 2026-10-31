@@ -16,30 +16,30 @@ Fill in the Owner column when you take a task. Stubs in the code say `TODO(<task
 
 ## Phase 1 — two phones haggle (Review 1, Sat 2:30 PM)
 
-| ID | Task | Files | Owner |
-| --- | --- | --- | --- |
-| R1.1 | Wallet sign endpoint with checks 1–6 | `wallet/checks.py`, `wallet/signer.py`, `wallet/keystore.py`, `wallet/mandate.py`, `api/wallet.py`, `tests/test_wallet_checks.py` | |
-| R1.2 | Weather fetch + cache (+ clear-sky fallback), `GET /api/weather` | `sim/weather.py`, `api/state.py`, `app.py` | |
-| R1.3 | Forecaster (`solar.py`, profiles) | `agent/.../forecaster.py`, `shared/.../solar.py`, `shared/.../profiles.py`, `agent/.../hub_client.py` | |
-| R1.4 | Planner (intents + plan windows) | `agent/.../planner.py`, `agent/.../hub_client.py` | |
-| R1.5 | Negotiator over A2A (protocol 7.3) | `agent/.../a2a_client.py`, `agent/.../executor.py`, `agent/.../runtime.py`, `agent/.../negotiator.py` | |
-| R1.6 | Contract signing + booking | `wallet/checks.py`, `wallet/signer.py`, `market/booking.py`, `market/registry.py`, `api/market.py`, `agent/.../hub_client.py` | |
-| R1.7 | Owner Home: haggle feed, live block card, solar/use | `web/src/pages/Owner.tsx`, `web/src/components/HaggleFeed.tsx`, `BlockCard.tsx`, `web/src/store/hub.ts` | |
+| ID | Task | Files | Owner | Status |
+| --- | --- | --- | --- | --- |
+| R1.1 | Wallet sign endpoint with checks 1–6 | `wallet/checks.py`, `wallet/signer.py`, `wallet/keystore.py`, `wallet/mandate.py`, `api/wallet.py`, `tests/test_wallet_checks.py` | | done |
+| R1.2 | Weather fetch + cache (+ clear-sky fallback), `GET /api/weather` | `sim/weather.py`, `api/state.py`, `app.py` | | done |
+| R1.3 | Forecaster (`solar.py`, profiles) | `agent/.../forecaster.py`, `shared/.../solar.py`, `shared/.../profiles.py`, `agent/.../hub_client.py` | | done |
+| R1.4 | Planner (intents + plan windows) | `agent/.../planner.py`, `agent/.../hub_client.py` | | done |
+| R1.5 | Negotiator over A2A (protocol 7.3) | `agent/.../a2a_client.py`, `agent/.../executor.py`, `agent/.../runtime.py`, `agent/.../negotiator.py` | | done |
+| R1.6 | Contract signing + booking | `wallet/checks.py`, `wallet/signer.py`, `market/booking.py`, `market/registry.py`, `api/market.py`, `agent/.../hub_client.py` | | done |
+| R1.7 | Owner Home: haggle feed, live block card, solar/use | `web/src/pages/Owner.tsx`, `web/src/components/HaggleFeed.tsx`, `BlockCard.tsx`, `web/src/store/hub.ts` | | done |
 
 ## Phase 2 — a full day runs (Review 2, Sat 8:30 PM)
 
-| ID | Task | Files | Owner |
-| --- | --- | --- | --- |
-| R2.1 | Gate-closure auction (per transformer, then open access) + market orders | `market/auction.py`, `market/orderbook.py`, `market/lifecycle.py`, `api/market.py`, `tests/test_auction.py` | |
-| R2.2 | Signed meters (pv + load sim, per-block totals) | `sim/meters.py`, `sim/pv.py`, `sim/load.py`, `wallet/keystore.py`, `clock.py` hook | |
-| R2.3 | Settlement + savings | `settlement/settle.py`, `settlement/savings.py`, `tests/test_settlement.py` | |
-| R2.4 | Ledger + verify | `settlement/ledger.py`, `api/ledger.py`, `tests/test_ledger.py` | |
-| R2.5 | Plan/offer approvals (wallet checks 7–8) + Approve card | `wallet/approvals.py`, `wallet/checks.py`, `api/wallet.py`, `api/approvals.py`, `web/src/components/ApprovalCard.tsx` | |
-| R2.6 | 2D street | `web/src/pages/Street.tsx`, `web/src/components/HouseSvg.tsx` | |
-| R2.7 | Console events (cloud, AC, speed, reset) with sim reacting | `sim/events.py`, `api/console.py`, `web/src/pages/Console.tsx` | |
-| R2.8 | Savings + history screens, mandate GET/PUT | `web/src/pages/Owner.tsx`, `web/src/components/SavingsCard.tsx`, `api/wallet.py`, `wallet/mandate.py` | |
-| R2.9 | `bad_bid` blocked and shown | `agent/.../runtime.py`, `wallet/checks.py`, `web/src/components/BlockedCard.tsx`, `scripts/attack_bad_bid.py` | |
-| R2.10 | Full day end to end at 300× | all | |
+| ID | Task | Files | Owner | Status |
+| --- | --- | --- | --- | --- |
+| R2.1 | Gate-closure auction (per transformer, then open access) + market orders | `market/auction.py`, `market/orderbook.py`, `market/lifecycle.py`, `api/market.py`, `tests/test_auction.py` | | done |
+| R2.2 | Signed meters (pv + load sim, per-block totals) | `sim/meters.py`, `sim/pv.py`, `sim/load.py`, `wallet/keystore.py`, `clock.py` hook | | done |
+| R2.3 | Settlement + savings | `settlement/settle.py`, `settlement/savings.py`, `tests/test_settlement.py` | | done |
+| R2.4 | Ledger + verify | `settlement/ledger.py`, `api/ledger.py`, `tests/test_ledger.py` | | done |
+| R2.5 | Plan/offer approvals (wallet checks 7–8) + Approve card | `wallet/approvals.py`, `wallet/checks.py`, `api/wallet.py`, `api/approvals.py`, `web/src/components/ApprovalCard.tsx` | | done |
+| R2.6 | 2D street | `web/src/pages/Street.tsx`, `web/src/components/HouseSvg.tsx` | | done |
+| R2.7 | Console events (cloud, AC, speed, reset) with sim reacting | `sim/events.py`, `api/console.py`, `web/src/pages/Console.tsx` | | done |
+| R2.8 | Savings + history screens, mandate GET/PUT | `web/src/pages/Owner.tsx`, `web/src/components/SavingsCard.tsx`, `api/wallet.py`, `wallet/mandate.py` | | done |
+| R2.9 | `bad_bid` blocked and shown | `agent/.../runtime.py`, `wallet/checks.py`, `web/src/components/BlockedCard.tsx`, `scripts/attack_bad_bid.py` | | done |
+| R2.10 | Full day end to end at 300× | all | | done |
 
 ## Phase 3 — overnight polish (freeze 6 AM)
 

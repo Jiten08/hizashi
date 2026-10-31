@@ -47,7 +47,7 @@ honcho start                      # hub :8000 + agents :9012 :9014 :9016 :9018
 ## Units and conventions
 
 - Energy: kWh per block. Prices: ₹ per kWh. Money: ₹, round to 2 decimals for display only.
-- Time: simulated IST (`Asia/Kolkata`), ISO strings. Block = `day` + `index` 0–95 (48 = 12:00–12:15). Key `"2026-10-31#48"`. Tradable blocks 24–75 (06:00–18:45).
+- Time: simulated IST (`Asia/Kolkata`), ISO strings. Block = `day` + `index` 0–95 (48 = 12:00–12:15). Key `"2026-10-31#48"`. Tradable blocks 26–70 (06:30–17:45, when the roofs produce).
 - Houses: `"h12" | "h14" | "h16" | "h18"`.
 - Hub modules publish through `bus.publish(Event)`; never write to sockets directly.
 - Agents never hold private keys; they ask the wallet (`POST /api/wallet/{house}/sign`).

@@ -10,12 +10,11 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta
 import logging
-import math
 import uuid
 
 import httpx
 
-from hizashi_shared import blocks, config, events as ev, profiles, street
+from hizashi_shared import blocks, config, events as ev, profiles, solar, street
 from hizashi_shared.models import BlockRef, Contract, Event, Forecast, HouseInfo, Mandate, Offer
 from . import forecaster, negotiator, planner
 from .a2a_client import negotiate_sale
@@ -38,6 +37,7 @@ class Runtime:
         self.planned = False
         self.current_sim_time: datetime | None = None
         self._negotiating_blocks: set[str] = set()
+        self.promise_factor = 1.0          # shrinks 10% after each shortfall
 
         # Load initial street & mandates synchronously from local data
         try:
@@ -77,7 +77,7 @@ class Runtime:
                     asyncio.create_task(self.negotiate_sell(b_ref))
 
     def fallback_forecast(self, house_info: HouseInfo, day: str) -> list[Forecast]:
-        """Fallback forecast: profile mean +/- 1.28 sd, solar bell curve peaking at 12:15."""
+        """Fallback forecast: profile mean +/- 1.28 sd; solar from the clear-sky roof model, p10/p90 at -/+15%."""
         log.info("%s using fallback forecast", self.house)
         try:
             means, stds = profiles.load_profile(house_info.profile)
@@ -85,19 +85,17 @@ class Runtime:
             means = [0.2] * config.BLOCKS_PER_DAY
             stds = [0.04] * config.BLOCKS_PER_DAY
 
-        kwp = house_info.roof.kwp if house_info.roof else 0.0
-        peak_solar = 0.8 * kwp * 0.25  # kWh per block peak
+        try:
+            clear = solar.roof_kwh_per_block(house_info.roof, solar.clear_sky_frame(day))
+        except Exception as e:
+            log.warning("%s clear-sky model failed (%s); assuming no solar", self.house, e)
+            clear = [0.0] * config.BLOCKS_PER_DAY
 
         fcs: list[Forecast] = []
         for i in range(config.BLOCKS_PER_DAY):
-            # Solar bell curve peaking at block 49 (12:15)
-            if house_info.roof and 24 <= i <= 74:
-                angle = (i - 49) / 25.0 * (math.pi / 2.0)
-                s_p50 = round(peak_solar * (math.cos(angle) ** 2), 4)
-                s_p10 = round(s_p50 * 0.85, 4)
-                s_p90 = round(s_p50 * 1.15, 4)
-            else:
-                s_p10 = s_p50 = s_p90 = 0.0
+            s_p50 = round(clear[i], 4)
+            s_p10 = round(s_p50 * 0.85, 4)
+            s_p90 = round(s_p50 * 1.15, 4)
 
             m_i = means[i]
             s_i = stds[i]
@@ -130,16 +128,26 @@ class Runtime:
         forecasts: list[Forecast]
         try:
             weather_data = await self.hub.get_weather()
-            # If weather dataframe can be built, pass to forecaster
-            import pandas as pd
-            df = pd.DataFrame(weather_data.get("blocks", []))
+            df = solar.weather_frame(weather_data)        # needs the 15-min DatetimeIndex
             forecasts = forecaster.forecast_day(me_info, df, self.day)
-        except Exception:
+        except Exception as e:
+            log.warning("%s forecaster failed (%s)", self.house, e)
             forecasts = self.fallback_forecast(me_info, self.day)
 
-        self.intents = planner.plan_day(forecasts, mandate)
-        self.remaining_sell = {i: kwh for i, (side, kwh) in self.intents.items() if side == "sell"}
-        self.remaining_buy = {i: kwh for i, (side, kwh) in self.intents.items() if side == "buy"}
+        intents = planner.plan_day(forecasts, mandate)
+        # Blocks already past PLANNED keep what they had (a replan mid-day only moves the future).
+        fixed = {blocks.parse_key(k).index for k, s in self.block_states.items() if s != "PLANNED"} if self.planned else set()
+        for i, intent in intents.items():
+            if i in fixed:
+                continue
+            self.intents[i] = intent
+            side, kwh = intent
+            self.remaining_sell.pop(i, None)
+            self.remaining_buy.pop(i, None)
+            if side == "sell":
+                self.remaining_sell[i] = round(kwh * self.promise_factor, 3)
+            elif side == "buy":
+                self.remaining_buy[i] = kwh
 
         windows = planner.plan_windows(self.house, self.day, self.intents)
         if windows:
@@ -218,10 +226,89 @@ class Runtime:
                         0.0, round(self.remaining_sell[block_ref.index] - contract.kwh, 3)
                     )
 
+    # --- gate closure: leftovers go to the auction -------------------------------------
+
+    async def post_leftovers(self, block_ref: BlockRef) -> None:
+        me = self.houses.get(self.house)
+        mandate = self.mandates.get(self.house)
+        if not me or not mandate:
+            return
+        i = block_ref.index
+        orders = []
+        sell = round(self.remaining_sell.get(i, 0.0), 3)
+        buy = round(self.remaining_buy.get(i, 0.0), 3)
+        if sell > config.MIN_TRADE_KWH:
+            orders.append(("ask", sell, negotiator.seller_limit(mandate.min_sell_price, me.buyback_rate)))
+        if buy > config.MIN_TRADE_KWH:
+            orders.append(("bid", buy, negotiator.buyer_limit(mandate.max_buy_price)))
+        for side, kwh, price in orders:
+            offer = Offer(offer_id=str(uuid.uuid4()), negotiation_id=f"market-{block_ref.key}", block=block_ref,
+                          side=side, house=self.house, to=None, kwh=kwh, price=price, round=0,  # type: ignore[arg-type]
+                          expires_at=blocks.block_start(block_ref), nonce=str(uuid.uuid4()))
+            signed = await self.hub.sign_offer(offer)
+            if signed.get("status") != "signed":
+                log.info("%s market %s for %s not signed: %s", self.house, side, block_ref.key, signed.get("reason"))
+                continue
+            res = await self.hub.post_order(Offer.model_validate(signed["offer"]))
+            log.info("%s market %s %.3f kWh @ ₹%.2f for %s: %s %s", self.house, side, kwh, price,
+                     block_ref.key, res.get("status"), res.get("reason") or "")
+
+    # --- console attack demo --------------------------------------------------------------
+
+    async def bad_bid(self, price: float = 40.0) -> dict:
+        """Bid far above the owner's max for the next OPEN block; the wallet must refuse it."""
+        open_blocks = sorted(blocks.parse_key(k).index for k, s in self.block_states.items() if s == "OPEN")
+        if not open_blocks:
+            log.info("%s bad_bid: no OPEN block", self.house)
+            return {"status": "skipped"}
+        ref = BlockRef(day=self.day, index=open_blocks[0])
+        mandate = self.mandates.get(self.house)
+        sellers = [h for h in street.neighbours(self.houses, self.house,
+                                                same_transformer=not mandate or mandate.counterparties == "same_transformer")
+                   if h.roof is not None]
+        offer = Offer(offer_id=str(uuid.uuid4()), negotiation_id=str(uuid.uuid4()), block=ref, side="bid",
+                      house=self.house, to=sellers[0].id if sellers else None, kwh=0.5, price=price,  # type: ignore[arg-type]
+                      round=0, expires_at=blocks.gate_close(ref), nonce=str(uuid.uuid4()))
+        res = await self.hub.sign_offer(offer)
+        log.info("%s bad_bid ₹%.2f for %s -> %s: %s", self.house, price, ref.key, res.get("status"), res.get("reason"))
+        return res
+
+    def after_settlement(self, s: dict) -> None:
+        if s.get("seller") == self.house and float(s.get("shortfall_kwh") or 0) > 0:
+            self.promise_factor = round(self.promise_factor * 0.9, 4)
+            for i in list(self.remaining_sell):
+                if self.block_states.get(BlockRef(day=self.day, index=i).key) in (None, "PLANNED", "OPEN"):
+                    self.remaining_sell[i] = round(self.remaining_sell[i] * 0.9, 3)
+            log.info("%s shortfall of %.3f kWh in %s; future promises now x%.2f", self.house,
+                     float(s["shortfall_kwh"]), s.get("block"), self.promise_factor)
+
+    def reset_day(self) -> None:
+        self.intents, self.remaining_sell, self.remaining_buy = {}, {}, {}
+        self.block_states = {}
+        self.planned = False
+        self.promise_factor = 1.0
+        self._negotiating_blocks.clear()
+
     async def on_event(self, event: Event) -> None:
         """Handle incoming hub events from the WebSocket subscription."""
         if event.type == ev.CLOCK_TICK:
             self.current_sim_time = event.sim_time
+            if event.data.get("reset"):
+                self.reset_day()
+
+        elif event.type == ev.CONSOLE_COMMAND and event.data.get("cmd") == "bad_bid":
+            await self.bad_bid(float(event.data.get("price", 40)))
+
+        elif event.type == ev.SETTLEMENT_DONE:
+            self.after_settlement(event.data.get("settlement", {}))
+
+        elif event.type == ev.MANDATE_UPDATED and event.house:
+            self.mandates[event.house] = Mandate.model_validate(event.data["mandate"])
+
+        elif event.type == ev.HOUSE_UPDATED and event.house:
+            self.houses[event.house] = HouseInfo.model_validate(event.data["house"])
+            if event.house == self.house and self.planned:
+                await self.forecast_and_plan()
 
         elif event.type == ev.BLOCK_STATE:
             block_key = event.data.get("block")
@@ -242,3 +329,6 @@ class Runtime:
                 rem = self.remaining_sell.get(block_ref.index, 0.0)
                 if rem > config.MIN_TRADE_KWH:
                     asyncio.create_task(self.negotiate_sell(block_ref))
+
+            elif state == "GATE_CLOSED":
+                asyncio.create_task(self.post_leftovers(blocks.parse_key(block_key)))
