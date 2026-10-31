@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "shared"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from shared.hizashi_shared import config, crypto  # noqa: E402
-from shared.hizashi_shared.models import HOUSES  # noqa: E402
+from hizashi_shared import config, crypto  # noqa: E402
+from hizashi_shared.models import HOUSES  # noqa: E402
 
 
 def key_path(name: str) -> Path:
