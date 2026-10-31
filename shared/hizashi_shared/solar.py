@@ -63,6 +63,43 @@ def weather_frame(w_json: dict) -> pd.DataFrame:
     return df[["ghi", "dni", "dhi", "temp_air", "cloud_cover"]]
 
 
+def clear_sky_frame(day: str) -> pd.DataFrame:
+    """96-block weather frame for a clear day: pvlib Ineichen x 0.85, cloud_cover=20.
+
+    The hub's offline weather fallback and the agents' fallback forecast both use it.
+    """
+    target_index = pd.date_range(
+        start=f"{day} 00:00",
+        end=f"{day} 23:45",
+        freq="15min",
+        tz=config.TZ,
+    )
+    # Pass linke_turbidity=3.0 so pvlib does not attempt an offline/network file lookup
+    cs = _location.get_clearsky(target_index, model="ineichen", linke_turbidity=3.0)
+
+    ghi = (cs["ghi"] * 0.85).clip(lower=0.0).round(2)
+    dni = (cs["dni"] * 0.85).clip(lower=0.0).round(2)
+    dhi = (cs["dhi"] * 0.85).clip(lower=0.0).round(2)
+
+    # Bengaluru diurnal temperature variation (~20°C min before dawn to ~28°C max early afternoon)
+    hours = np.array([ts.hour + ts.minute / 60.0 for ts in target_index])
+    temp_curve = 20.0 + 8.0 * np.sin(np.pi * np.clip(hours - 6.0, 0, 12) / 12.0)
+    temp_air = pd.Series(temp_curve.round(2), index=target_index)
+
+    cloud_cover = pd.Series([20.0] * config.BLOCKS_PER_DAY, index=target_index)
+
+    return pd.DataFrame(
+        {
+            "ghi": ghi,
+            "dni": dni,
+            "dhi": dhi,
+            "temp_air": temp_air,
+            "cloud_cover": cloud_cover,
+        },
+        index=target_index,
+    )
+
+
 def roof_kw(roof: Roof, weather: pd.DataFrame) -> pd.Series:
     """AC kW at each timestamp of `weather` (needs ghi, dni, dhi, temp_air)."""
     solpos = _location.get_solarposition(weather.index)

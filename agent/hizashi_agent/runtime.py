@@ -10,12 +10,11 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta
 import logging
-import math
 import uuid
 
 import httpx
 
-from hizashi_shared import blocks, config, events as ev, profiles, street
+from hizashi_shared import blocks, config, events as ev, profiles, solar, street
 from hizashi_shared.models import BlockRef, Contract, Event, Forecast, HouseInfo, Mandate, Offer
 from . import forecaster, negotiator, planner
 from .a2a_client import negotiate_sale
@@ -77,7 +76,7 @@ class Runtime:
                     asyncio.create_task(self.negotiate_sell(b_ref))
 
     def fallback_forecast(self, house_info: HouseInfo, day: str) -> list[Forecast]:
-        """Fallback forecast: profile mean +/- 1.28 sd, solar bell curve peaking at 12:15."""
+        """Fallback forecast: profile mean +/- 1.28 sd; solar from the clear-sky roof model, p10/p90 at -/+15%."""
         log.info("%s using fallback forecast", self.house)
         try:
             means, stds = profiles.load_profile(house_info.profile)
@@ -85,19 +84,17 @@ class Runtime:
             means = [0.2] * config.BLOCKS_PER_DAY
             stds = [0.04] * config.BLOCKS_PER_DAY
 
-        kwp = house_info.roof.kwp if house_info.roof else 0.0
-        peak_solar = 0.8 * kwp * 0.25  # kWh per block peak
+        try:
+            clear = solar.roof_kwh_per_block(house_info.roof, solar.clear_sky_frame(day))
+        except Exception as e:
+            log.warning("%s clear-sky model failed (%s); assuming no solar", self.house, e)
+            clear = [0.0] * config.BLOCKS_PER_DAY
 
         fcs: list[Forecast] = []
         for i in range(config.BLOCKS_PER_DAY):
-            # Solar bell curve peaking at block 49 (12:15)
-            if house_info.roof and 24 <= i <= 74:
-                angle = (i - 49) / 25.0 * (math.pi / 2.0)
-                s_p50 = round(peak_solar * (math.cos(angle) ** 2), 4)
-                s_p10 = round(s_p50 * 0.85, 4)
-                s_p90 = round(s_p50 * 1.15, 4)
-            else:
-                s_p10 = s_p50 = s_p90 = 0.0
+            s_p50 = round(clear[i], 4)
+            s_p10 = round(s_p50 * 0.85, 4)
+            s_p90 = round(s_p50 * 1.15, 4)
 
             m_i = means[i]
             s_i = stds[i]

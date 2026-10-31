@@ -375,7 +375,7 @@ def load_key(path) -> SigningKey: ...      # file holds base64 seed
 ### 4.4 `blocks.py`
 
 - `block_start(ref) -> datetime`, `block_of(dt) -> BlockRef`, `gate_close(ref) = start − 60 min`, `open_time(ref) = max(day_start, start − 120 min)`, `settle_time(ref) = start + 15 min`.
-- `TRADABLE = range(24, 76)` (06:00–18:45). Other blocks never open.
+- `TRADABLE = range(26, 71)` (06:30–17:45, the blocks with clear-sky solar output on `SIM_DAY`). Other blocks never open.
 - Constants from config: `DAY_START = 05:00`, `DAY_END = 19:00`.
 
 ### 4.5 `events.py` (string constants)

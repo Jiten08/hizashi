@@ -33,7 +33,7 @@ block_intent = plan_block
 
 
 def plan_day(forecasts: list[Forecast], mandate: Mandate) -> dict[int, Intent]:
-    """Determine intents for all TRADABLE blocks (24..75)."""
+    """Determine intents for all TRADABLE blocks (26..70)."""
     intents: dict[int, Intent] = {}
     fc_by_idx = {fc.block.index: fc for fc in forecasts}
     for idx in blocks.TRADABLE:

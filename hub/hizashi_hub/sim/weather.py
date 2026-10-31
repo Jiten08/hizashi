@@ -14,6 +14,7 @@ import pandas as pd
 import pvlib
 
 from hizashi_shared import config
+from hizashi_shared import solar
 from hizashi_shared.solar import weather_frame
 
 log = logging.getLogger("hizashi.sim.weather")
@@ -83,37 +84,8 @@ async def fetch_open_meteo(day: str) -> pd.DataFrame:
 
 
 def clear_sky_fallback(day: str) -> pd.DataFrame:
-    """Generate clear-sky fallback using pvlib Ineichen scaled by 0.85 with cloud_cover=20."""
-    target_index = pd.date_range(
-        start=f"{day} 00:00",
-        end=f"{day} 23:45",
-        freq="15min",
-        tz=config.TZ,
-    )
-    # Pass linke_turbidity=3.0 so pvlib does not attempt an offline/network file lookup
-    cs = _location.get_clearsky(target_index, model="ineichen", linke_turbidity=3.0)
-
-    ghi = (cs["ghi"] * 0.85).clip(lower=0.0).round(2)
-    dni = (cs["dni"] * 0.85).clip(lower=0.0).round(2)
-    dhi = (cs["dhi"] * 0.85).clip(lower=0.0).round(2)
-
-    # Bengaluru diurnal temperature variation (~20°C min before dawn to ~28°C max early afternoon)
-    hours = np.array([ts.hour + ts.minute / 60.0 for ts in target_index])
-    temp_curve = 20.0 + 8.0 * np.sin(np.pi * np.clip(hours - 6.0, 0, 12) / 12.0)
-    temp_air = pd.Series(temp_curve.round(2), index=target_index)
-
-    cloud_cover = pd.Series([20.0] * config.BLOCKS_PER_DAY, index=target_index)
-
-    return pd.DataFrame(
-        {
-            "ghi": ghi,
-            "dni": dni,
-            "dhi": dhi,
-            "temp_air": temp_air,
-            "cloud_cover": cloud_cover,
-        },
-        index=target_index,
-    )
+    """pvlib Ineichen clear-sky x 0.85, cloud_cover=20 (see solar.clear_sky_frame)."""
+    return solar.clear_sky_frame(day)
 
 
 def to_json(frame: pd.DataFrame, source: str, day: str | None = None) -> dict:
