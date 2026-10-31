@@ -15,12 +15,12 @@ router = APIRouter(prefix="/market", tags=["market"])
 
 @router.post("/contracts")
 async def book_contract(request: Request, body: dict = Body(...), authorization: str | None = Header(None)):
-    """Body: a Contract with seller_sig and buyer_sig.
+    """Body: a Contract with seller_sig and buyer_sig, bare or as {"contract": {...}}.
     -> {"status": "booked", "contract": {... market_sig}} | {"status": "refused", "reason"}"""
     if not booking.any_agent_token(bearer(authorization)):
         return JSONResponse({"status": "refused", "reason": "Only a house agent can book contracts."}, 401)
     try:
-        contract = Contract.model_validate(body)
+        contract = Contract.model_validate(body.get("contract", body))
     except ValidationError as e:
         return JSONResponse({"status": "refused", "reason": f"That contract isn't well-formed: {e.errors()[0]['msg']}."}, 422)
     c = clock.get()

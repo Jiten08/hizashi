@@ -14,6 +14,7 @@ pytest
 cd web && npm install && npm run build && cd ..
 honcho start                      # hub :8000 + agents :9012 :9014 :9016 :9018
 # demo with phones: honcho -f Procfile.demo start  (needs cloudflared)
+# Windows, output piped to a file: python -X utf8 -m honcho start  (else honcho crashes printing ₹)
 # frontend dev: cd web && npm run dev  (http://localhost:5173)
 ```
 
