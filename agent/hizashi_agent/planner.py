@@ -1,8 +1,13 @@
 """Sell / buy / sit out per block + day plan windows (section 7.4).
 
-spare_low = solar_p10 - use_p90. If spare_low > MIN_TRADE_KWH -> sell min(spare_low, max_promise_kwh).
-Else if use_p10 > solar_p50 -> buy use_p10 - solar_p50.
-Else none.
+Every house can be a seller in one block and a buyer in the next. Per block:
+net = solar_p50 - use_p50 (expected surplus).
+  net x SELL_SHARE > MIN_TRADE_KWH  -> sell min(net x SELL_SHARE, max_promise_kwh)
+  -net > MIN_TRADE_KWH              -> buy  min(-net, max_promise_kwh)
+  else none.
+SELL_SHARE keeps a 10% cushion so a small dip doesn't turn into a shortfall penalty.
+(The spec's first cut planned on solar_p10 - use_p90, which left most real surplus and
+deficit unplanned: about a third of the street's tradable energy.)
 
 Plan windows group consecutive blocks with the same side, cut at the 3-hour slots
 07:00 / 10:00 / 13:00 / 16:00 so the owner approves the day in readable chunks
@@ -19,19 +24,17 @@ Intent = tuple[Literal["sell", "buy", "none"], float]
 SLOT_STARTS = {28, 40, 52, 64}      # 07:00, 10:00, 13:00, 16:00
 
 
+SELL_SHARE = 0.9
+
+
 def plan_block(fc: Forecast, mandate: Mandate) -> Intent:
-    """Determine intent for a single block."""
-    spare_low = fc.solar_p10 - fc.use_p90
-    if spare_low > config.MIN_TRADE_KWH:
-        kwh = round(min(spare_low, mandate.max_promise_kwh), 3)
-        return ("sell", kwh)
-    elif fc.use_p10 > fc.solar_p50:
-        kwh = round(fc.use_p10 - fc.solar_p50, 3)
-        if kwh > 0:
-            return ("buy", kwh)
-        return ("none", 0.0)
-    else:
-        return ("none", 0.0)
+    """Sell, buy or sit out for one block, from the expected surplus."""
+    net = fc.solar_p50 - fc.use_p50
+    if net * SELL_SHARE > config.MIN_TRADE_KWH:
+        return ("sell", round(min(net * SELL_SHARE, mandate.max_promise_kwh), 3))
+    if -net > config.MIN_TRADE_KWH:
+        return ("buy", round(min(-net, mandate.max_promise_kwh), 3))
+    return ("none", 0.0)
 
 
 # Alias block_intent to plan_block for compatibility

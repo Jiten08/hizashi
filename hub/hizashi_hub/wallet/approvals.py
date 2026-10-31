@@ -1,8 +1,12 @@
 """Plan + offer approvals: create (4-digit code), resolve, publish approval.requested/resolved.
 
 Day plans arrive from the agent at PLANNED. Buy windows worth more than the mandate's
-approve_above wait for the owner; everything else is `auto`. Selling needs no OK: the
+approve_above ask the owner; everything else is `auto`. Selling needs no OK: the
 min price and per-block cap already bound it, and it earns rather than spends.
+
+No answer is a yes: when the window's first block opens and the owner still hasn't
+answered, the approval lapses (`expired`) and the window turns `auto`, so the agent
+trades within the wallet's other limits. Only Decline stops it.
 """
 import json
 import secrets
@@ -193,9 +197,9 @@ def resolve(conn: sqlite3.Connection, approval_id: str, decision: str, channel: 
     return resolved
 
 
-def expire_through(conn: sqlite3.Connection, ref: BlockRef, now: datetime) -> list[Approval]:
-    """At a block's gate closure: pending plan approvals whose window ends by this block can't be
-    used any more. The approval and its window become `expired`."""
+def lapse_at_open(conn: sqlite3.Connection, ref: BlockRef, now: datetime) -> list[Approval]:
+    """When a block opens, unanswered plan approvals for windows that have started lapse:
+    the approval is `expired` and its window goes `auto` (the agent may trade)."""
     out = []
     touched: set[str] = set()
     for r in conn.execute("SELECT * FROM approvals WHERE status = 'pending' AND kind = 'plan'").fetchall():
@@ -203,11 +207,14 @@ def expire_through(conn: sqlite3.Connection, ref: BlockRef, now: datetime) -> li
         if not p:
             continue
         w = PlanWindow.model_validate_json(p["json"])
-        if w.day == ref.day and w.last_index <= ref.index:
+        if w.day == ref.day and w.first_index <= ref.index:
             a = _expire(conn, r["approval_id"], now)
             if a:
                 out.append(a)
-            _save_plan(conn, signer.sign_plan(w.house, w.model_copy(update={"status": "expired"})))
+                ledger.append(conn, now.isoformat(), "approval", a.approval_id,
+                              {"house": a.house, "kind": a.kind, "ref_id": a.ref_id, "summary": a.summary,
+                               "decision": "no answer, agent went ahead", "channel": None})
+            _save_plan(conn, signer.sign_plan(w.house, w.model_copy(update={"status": "auto"})))
             touched.add(w.house)
     conn.commit()
     for house in touched:

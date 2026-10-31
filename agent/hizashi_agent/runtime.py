@@ -38,6 +38,8 @@ class Runtime:
         self.current_sim_time: datetime | None = None
         self._negotiating_blocks: set[str] = set()
         self.promise_factor = 1.0          # shrinks 10% after each shortfall
+        self.forecasts: dict[int, Forecast] = {}
+        self.actual: dict[int, dict[str, float]] = {}   # block -> metered solar/use kWh so far
 
         # Load initial street & mandates synchronously from local data
         try:
@@ -134,6 +136,7 @@ class Runtime:
             log.warning("%s forecaster failed (%s)", self.house, e)
             forecasts = self.fallback_forecast(me_info, self.day)
 
+        self.forecasts = {f.block.index: f for f in forecasts}
         intents = planner.plan_day(forecasts, mandate)
         # Blocks already past PLANNED keep what they had (a replan mid-day only moves the future).
         fixed = {blocks.parse_key(k).index for k, s in self.block_states.items() if s != "PLANNED"} if self.planned else set()
@@ -282,8 +285,60 @@ class Runtime:
             log.info("%s shortfall of %.3f kWh in %s; future promises now x%.2f", self.house,
                      float(s["shortfall_kwh"]), s.get("block"), self.promise_factor)
 
+    # --- intraday correction: the meter says how good the forecast has been ---------------
+
+    LOOKBACK = 4                       # blocks (one hour)
+
+    def record_reading(self, data: dict) -> None:
+        r = data.get("reading") or {}
+        ts = r.get("ts")
+        if not ts:
+            return
+        minute = datetime.fromisoformat(ts) - timedelta(minutes=1)
+        i = blocks.block_of(minute).index
+        a = self.actual.setdefault(i, {"solar": 0.0, "use": 0.0, "n": 0})
+        solar = float(r.get("solar_wh", 0)) / 1000
+        a["solar"] += solar
+        a["use"] += solar - float(r.get("export_wh", 0)) / 1000 + float(r.get("import_wh", 0)) / 1000
+        a["n"] += 1
+
+    def ratios(self, before: int) -> tuple[float, float]:
+        """(solar, use) actual/forecast over the last hour of complete blocks, clamped to [0.5, 1.5]."""
+        done = [i for i in range(before - 1, -1, -1) if self.actual.get(i, {}).get("n", 0) >= 15 and i in self.forecasts]
+        done = done[: self.LOOKBACK]
+        fs = sum(self.forecasts[i].solar_p50 for i in done)
+        fu = sum(self.forecasts[i].use_p50 for i in done)
+        rs = sum(self.actual[i]["solar"] for i in done) / fs if fs > 0.05 else 1.0
+        ru = sum(self.actual[i]["use"] for i in done) / fu if fu > 0.05 else 1.0
+        clamp = lambda x: max(0.5, min(1.5, x))
+        return clamp(rs), clamp(ru)
+
+    def replan_block(self, index: int) -> None:
+        """As a block opens, re-decide sell/buy for it with the forecast scaled by the last hour."""
+        fc = self.forecasts.get(index)
+        mandate = self.mandates.get(self.house)
+        if fc is None or mandate is None:
+            return
+        rs, ru = self.ratios(index)
+        adj = fc.model_copy(update={
+            "solar_p10": fc.solar_p10 * rs, "solar_p50": fc.solar_p50 * rs, "solar_p90": fc.solar_p90 * rs,
+            "use_p10": fc.use_p10 * ru, "use_p50": fc.use_p50 * ru, "use_p90": fc.use_p90 * ru,
+        })
+        side, kwh = planner.plan_block(adj, mandate)
+        self.intents[index] = (side, kwh)
+        self.remaining_sell.pop(index, None)
+        self.remaining_buy.pop(index, None)
+        if side == "sell":
+            self.remaining_sell[index] = round(kwh * self.promise_factor, 3)
+        elif side == "buy":
+            self.remaining_buy[index] = kwh
+        if abs(rs - 1) > 0.05 or abs(ru - 1) > 0.05:
+            log.info("%s %s re-planned with solar x%.2f use x%.2f -> %s %.3f", self.house,
+                     blocks.label(BlockRef(day=self.day, index=index)), rs, ru, side, kwh)
+
     def reset_day(self) -> None:
         self.intents, self.remaining_sell, self.remaining_buy = {}, {}, {}
+        self.actual = {}
         self.block_states = {}
         self.planned = False
         self.promise_factor = 1.0
@@ -298,6 +353,9 @@ class Runtime:
 
         elif event.type == ev.CONSOLE_COMMAND and event.data.get("cmd") == "bad_bid":
             await self.bad_bid(float(event.data.get("price", 40)))
+
+        elif event.type == ev.METER_READING and event.house == self.house:
+            self.record_reading(event.data)
 
         elif event.type == ev.SETTLEMENT_DONE:
             self.after_settlement(event.data.get("settlement", {}))
@@ -325,6 +383,7 @@ class Runtime:
                 block_ref = blocks.parse_key(block_key)
                 if not self.planned:
                     await self.forecast_and_plan()
+                self.replan_block(block_ref.index)
 
                 rem = self.remaining_sell.get(block_ref.index, 0.0)
                 if rem > config.MIN_TRADE_KWH:
