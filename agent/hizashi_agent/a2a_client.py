@@ -224,7 +224,7 @@ async def negotiate_sale(
                 TaskState.TASK_STATE_COMPLETED,
                 TaskState.TASK_STATE_REJECTED,
                 TaskState.TASK_STATE_FAILED,
-                TaskState.TASK_STATE_CANCELLED,
+                TaskState.TASK_STATE_CANCELED,
             ):
                 break
 
