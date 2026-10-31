@@ -3,4 +3,4 @@ h12: python -m hizashi_agent --house h12 --port 9012
 h14: python -m hizashi_agent --house h14 --port 9014
 h16: python -m hizashi_agent --house h16 --port 9016
 h18: python -m hizashi_agent --house h18 --port 9018
-tunnel: cloudflared tunnel --url http://localhost:8000
+tunnel: ngrok http 8000 --log stdout --log-format logfmt

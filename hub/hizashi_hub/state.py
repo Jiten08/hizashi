@@ -10,7 +10,7 @@ from hizashi_shared import config
 from hizashi_shared import events as ev
 from hizashi_shared.models import Event, HouseInfo, Mandate
 
-from . import bus
+from . import bus, tunnel
 
 RECENT_EVENTS = 200
 
@@ -105,7 +105,7 @@ class HubState:
             "sim_time": self.sim_time.isoformat() if self.sim_time else None,
             "speed": self.speed,
             "running": self.running,
-            "public_url": config.PUBLIC_URL or None,
+            "public_url": tunnel.public_url(),
             "houses": {h: info.model_dump(mode="json") for h, info in self.houses.items()},
             "mandates": {h: m.model_dump(mode="json") for h, m in self.mandates.items()},
             "blocks": self.blocks,

@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from hizashi_shared import config, street
 
 from .. import state as hub_state
+from .. import tunnel
 from ..sim import weather
 
 router = APIRouter(tags=["state"])
@@ -13,6 +14,14 @@ router = APIRouter(tags=["state"])
 def get_state() -> dict:
     """The live snapshot: clock, speed, houses, mandates, block states, trades, savings..."""
     return hub_state.get().snapshot()
+
+
+@router.get("/connect")
+def get_connect() -> dict:
+    """What the dashboard puts in each house's QR code for the phone app."""
+    hub = tunnel.public_url()
+    return {"hub": hub, "houses": [{"house": h, "label": info.label, "payload": {"hub": hub, "house": h}}
+                                   for h, info in hub_state.get().houses.items()]}
 
 
 @router.get("/registry")
