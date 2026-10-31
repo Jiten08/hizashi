@@ -8,11 +8,13 @@ const LOG_SIZE = 300;
 export interface HubStore extends Snapshot {
   loaded: boolean;
   connected: boolean;
+  mock: boolean;           // true when ?mock=1 — connection badge shows "mock"
   log: HubEvent[];
   blocked: HubEvent[];
   meters: Record<string, HubEvent>;
   setSnapshot: (s: Snapshot) => void;
   setConnected: (c: boolean) => void;
+  setMock: (m: boolean) => void;
   apply: (e: HubEvent) => void;
 }
 
@@ -28,8 +30,8 @@ type Reducer = (s: HubStore, e: HubEvent) => Partial<HubStore>;
 const reducers: Record<string, Reducer> = {
   [EV.CLOCK_TICK]: (_s, e) => ({
     sim_time: e.sim_time,
-    speed: e.data.speed,
-    running: e.data.running,
+    speed: e.data.speed ?? _s.speed,
+    running: e.data.running ?? _s.running,
     ...(e.data.reset
       ? { blocks: {}, contracts: [], settlements: [], negotiations: {}, approvals: [], flags: [], blocked: [], log: [] }
       : {}),
@@ -70,15 +72,21 @@ export const useHubStore = create<HubStore>((set) => ({
   ...empty,
   loaded: false,
   connected: false,
+  mock: false,
   log: [],
   blocked: [],
   meters: {},
   setSnapshot: (snap) => set({ ...snap, loaded: true, log: snap.recent_events ?? [] }),
   setConnected: (connected) => set({ connected }),
+  setMock: (mock) => set({ mock }),
   apply: (e) =>
     set((s) => {
+      // Unknown event types are ignored, not crashed.
       const patch = reducers[e.type]?.(s, e) ?? {};
-      const log = e.type === EV.CLOCK_TICK ? patch.log ?? s.log : [...(patch.log ?? s.log), e].slice(-LOG_SIZE);
+      const isClock = e.type === EV.CLOCK_TICK;
+      const log = isClock
+        ? patch.log ?? s.log
+        : [...(patch.log ?? s.log), e].slice(-LOG_SIZE);
       return { ...patch, log };
     }),
 }));

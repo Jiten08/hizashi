@@ -7,3 +7,4 @@ export { HaggleFeed } from "./HaggleFeed";
 export { HouseSvg } from "./HouseSvg";
 export { SavingsCard } from "./SavingsCard";
 export { SimClock } from "./SimClock";
+export { SolarUseStrip } from "./SolarUseStrip";
