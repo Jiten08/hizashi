@@ -1,9 +1,10 @@
 """/api/state, /api/registry, /api/weather."""
 from fastapi import APIRouter
 
-from hizashi_shared import street
+from hizashi_shared import config, street
 
 from .. import state as hub_state
+from ..sim import weather
 
 router = APIRouter(tags=["state"])
 
@@ -26,6 +27,8 @@ def get_registry() -> dict:
 
 
 @router.get("/weather")
-def get_weather() -> dict:
+async def get_weather(day: str | None = None) -> dict:
     """The 96-block forecast frame + source ("open-meteo" or "clear-sky fallback")."""
-    raise NotImplementedError("TODO(R1.2, Tezash)")
+    target_day = day or config.SIM_DAY
+    frame, source = await weather.load_weather(target_day)
+    return weather.to_json(frame, source, target_day)

@@ -9,13 +9,16 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "shared"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from hizashi_shared import config, crypto  # noqa: E402
-from hizashi_shared.models import HOUSES  # noqa: E402
+from hizashi_shared.models import HOUSES  # noqa: E402  Tuple
 
 
 def key_path(name: str) -> Path:
