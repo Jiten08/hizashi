@@ -1,20 +1,15 @@
-import { Toast } from "@heroui/react";
+// Desktop demo only: the street dashboard and its controls. Owners use the phone app (mobile/).
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Toaster } from "./components/ui";
 import Console from "./pages/Console";
-import Landing from "./pages/Landing";
-import Owner from "./pages/Owner";
-import Street from "./pages/Street";
-import Street3D from "./pages/Street3D";
+import Dashboard from "./pages/Dashboard";
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Toast.Provider placement="top" />
+      <Toaster />
       <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/h/:house" element={<Owner />} />
-        <Route path="/street" element={<Street />} />
-        <Route path="/street/3d" element={<Street3D />} />
+        <Route path="/" element={<Dashboard />} />
         <Route path="/console" element={<Console />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

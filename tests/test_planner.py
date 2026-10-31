@@ -30,43 +30,38 @@ def _make_mandate(house: str, max_promise: float = 1.0) -> Mandate:
     )
 
 
-def test_deck_block():
-    # H12 at 12:00 (block 48) with solar_p10 0.65 and use_p90 0.25 -> sell 0.40
+def test_surplus_block_sells_90_percent():
+    # H12 at 12:00: expected 0.80 solar, 0.20 use -> surplus 0.60 -> sell 0.54
     fc = _make_fc("h12", 48, solar_p10=0.65, solar_p50=0.80, solar_p90=0.95,
                   use_p10=0.15, use_p50=0.20, use_p90=0.25)
-    m = _make_mandate("h12", max_promise=1.0)
-    intent = plan_block(fc, m)
-    assert intent == ("sell", 0.40)
+    assert plan_block(fc, _make_mandate("h12", max_promise=1.0)) == ("sell", 0.54)
 
 
-def test_no_solar_house():
-    # A no-solar house with use_p10 0.20 -> buy 0.20
+def test_no_solar_house_buys_expected_use():
     fc = _make_fc("h14", 48, solar_p10=0.0, solar_p50=0.0, solar_p90=0.0,
                   use_p10=0.20, use_p50=0.30, use_p90=0.40)
-    m = _make_mandate("h14", max_promise=1.0)
-    intent = plan_block(fc, m)
-    assert intent == ("buy", 0.20)
+    assert plan_block(fc, _make_mandate("h14", max_promise=1.0)) == ("buy", 0.30)
 
 
-def test_tiny_spare():
-    # spare_low <= MIN_TRADE_KWH (0.05) -> none
-    fc = _make_fc("h12", 48, solar_p10=0.24, solar_p50=0.40, solar_p90=0.50,
-                  use_p10=0.10, use_p50=0.15, use_p90=0.20)
-    # spare_low = 0.24 - 0.20 = 0.04 <= 0.05
-    # use_p10 (0.10) <= solar_p50 (0.40) -> none
-    m = _make_mandate("h12", max_promise=1.0)
-    intent = plan_block(fc, m)
-    assert intent == ("none", 0.0)
+def test_solar_house_buys_in_a_deficit_block():
+    # Evening: 0.05 solar, 0.40 use -> the seller of noon is a buyer now
+    fc = _make_fc("h12", 70, solar_p10=0.04, solar_p50=0.05, solar_p90=0.06,
+                  use_p10=0.30, use_p50=0.40, use_p90=0.50)
+    assert plan_block(fc, _make_mandate("h12", max_promise=1.0)) == ("buy", 0.35)
 
 
-def test_max_promise_caps_sale():
-    # spare_low = 1.5, max_promise = 1.0 -> sell 1.0
+def test_tiny_net_sits_out():
+    fc = _make_fc("h12", 48, solar_p10=0.24, solar_p50=0.30, solar_p90=0.36,
+                  use_p10=0.20, use_p50=0.26, use_p90=0.32)
+    assert plan_block(fc, _make_mandate("h12", max_promise=1.0)) == ("none", 0.0)
+
+
+def test_max_promise_caps_both_sides():
     fc = _make_fc("h12", 48, solar_p10=1.8, solar_p50=2.0, solar_p90=2.2,
                   use_p10=0.2, use_p50=0.25, use_p90=0.3)
-    # spare_low = 1.8 - 0.3 = 1.5 > max_promise (1.0)
-    m = _make_mandate("h12", max_promise=1.0)
-    intent = plan_block(fc, m)
-    assert intent == ("sell", 1.0)
+    assert plan_block(fc, _make_mandate("h12", max_promise=1.0)) == ("sell", 1.0)
+    fc = _make_fc("h14", 48, solar_p10=0, solar_p50=0, solar_p90=0, use_p10=1.2, use_p50=1.5, use_p90=1.8)
+    assert plan_block(fc, _make_mandate("h14", max_promise=1.0)) == ("buy", 1.0)
 
 
 def test_plan_day_and_windows():
@@ -83,6 +78,6 @@ def test_plan_day_and_windows():
     windows = plan_windows("h12", "2026-10-31", intents)
     assert [(w.first_index, w.last_index) for w in windows] == [(26, 27), (28, 39), (40, 51), (52, 63), (64, 70)]
     assert all(w.side == "sell" for w in windows)
-    assert round(sum(w.kwh for w in windows), 2) == round(45 * 0.40, 2)
+    assert round(sum(w.kwh for w in windows), 2) == round(45 * 0.54, 2)
     w = windows[2]                                    # 10:00-13:00
-    assert w.kwh == 4.8 and w.expected_value == round(4.8 * 4.68, 2)
+    assert w.kwh == 6.48 and w.expected_value == round(6.48 * 4.68, 2)

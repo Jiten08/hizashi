@@ -116,13 +116,22 @@ def test_replanning_keeps_decisions_and_expires_dropped(conn):
     assert told == ["expired"]                                            # the phone hears about it
 
 
-def test_expire_at_gate_closure(conn):
+def test_no_answer_lapses_to_auto_when_window_opens(conn):
     approvals.store_plans(conn, "h14", [window(40, 51)], H14, NOW)
-    assert approvals.expire_through(conn, BlockRef(day=DAY, index=50), NOW) == []
-    [a] = approvals.expire_through(conn, BlockRef(day=DAY, index=51), NOW)
+    assert approvals.lapse_at_open(conn, BlockRef(day=DAY, index=39), NOW) == []     # not started yet
+    [a] = approvals.lapse_at_open(conn, BlockRef(day=DAY, index=40), NOW)
     assert a.status == "expired"
     [w] = approvals.plans_for(conn, "h14", DAY)
-    assert w.status == "expired" and checks.check_approval("buy", 0.1, 4.6, BlockRef(day=DAY, index=48), H14, [w]).check == 8
+    assert w.status == "auto" and checks.check_approval("buy", 0.1, 4.6, BlockRef(day=DAY, index=48), H14, [w]).ok
+
+
+def test_decline_still_stops_after_open(conn):
+    approvals.store_plans(conn, "h14", [window(40, 51)], H14, NOW)
+    [a] = approvals.listing(conn, "h14")
+    approvals.resolve(conn, a["approval_id"], "decline", "app", NOW)
+    assert approvals.lapse_at_open(conn, BlockRef(day=DAY, index=40), NOW) == []
+    [w] = approvals.plans_for(conn, "h14", DAY)
+    assert w.status == "declined"
 
 
 def test_budget_counts_booked_contracts(conn):

@@ -1,4 +1,4 @@
-// One house for the street SVG. Roof glow follows solar kW / kWp; dims in an outage.
+// One house in the street illustration. Roof panels glow with live solar; dims in an outage.
 export function HouseSvg({ x, y, label, glow, hasSolar, outage, cloud, spareKw }: {
   x: number; y: number; label: string; glow: number; hasSolar: boolean; outage: boolean; cloud: boolean; spareKw: number | null;
 }) {
@@ -6,31 +6,29 @@ export function HouseSvg({ x, y, label, glow, hasSolar, outage, cloud, spareKw }
   const spare = spareKw !== null && spareKw >= 0.05;
   const short = spareKw !== null && spareKw <= -0.05;
   return (
-    <g transform={`translate(${x} ${y})`} opacity={outage ? 0.45 : 1}>
+    <g transform={`translate(${x} ${y})`} opacity={outage ? 0.4 : 1}>
       {hasSolar && g > 0.05 && !outage && (
-        <circle cx="0" cy="-58" r={46 + 26 * g} fill="#fbbf24" opacity={0.18 + 0.32 * g} className="sun-glow" />
+        <circle cx="0" cy="-46" r={40 + 30 * g} fill="url(#sunGlow)" opacity={0.35 + 0.5 * g} className="breathe" />
       )}
-      <rect x="-62" y="-20" width="124" height="86" rx="6" fill="#fff" stroke="#e7e5e4" strokeWidth="2" />
-      <rect x="-14" y="26" width="28" height="40" rx="3" fill="#f5f5f4" stroke="#e7e5e4" />
-      <rect x="-48" y="0" width="24" height="20" rx="3" fill={outage ? "#e7e5e4" : "#fef3c7"} />
-      <rect x="24" y="0" width="24" height="20" rx="3" fill={outage ? "#e7e5e4" : "#fef3c7"} />
-      <polygon points="-76,-18 0,-78 76,-18" fill={hasSolar ? "#44403c" : "#a8a29e"} />
-      {hasSolar && (
-        <polygon points="-50,-30 0,-68 50,-30" fill={`rgba(217,138,4,${0.25 + 0.75 * g})`} stroke="#fde68a" strokeWidth="1.5" />
-      )}
+      <rect x="-58" y="-16" width="116" height="78" rx="10" fill="#fff" stroke="rgba(0,0,0,0.07)" />
+      <rect x="-12" y="24" width="24" height="38" rx="5" fill="#f2f2f7" />
+      <rect x="-44" y="4" width="22" height="18" rx="4" fill={outage ? "#e5e5ea" : "#fff4d6"} />
+      <rect x="22" y="4" width="22" height="18" rx="4" fill={outage ? "#e5e5ea" : "#fff4d6"} />
+      <path d="M-70 -14 L0 -66 L70 -14 Z" fill={hasSolar ? "#3a3a3c" : "#c7c7cc"} strokeLinejoin="round" />
+      {hasSolar && <path d="M-44 -26 L0 -58 L44 -26 Z" fill={`rgba(255,149,0,${0.3 + 0.7 * g})`} />}
       {cloud && (
-        <g transform="translate(18 -112)" opacity="0.95">
-          <ellipse cx="0" cy="0" rx="34" ry="16" fill="#cbd5e1" />
-          <ellipse cx="-18" cy="-8" rx="18" ry="14" fill="#cbd5e1" />
-          <ellipse cx="14" cy="-12" rx="20" ry="16" fill="#e2e8f0" />
+        <g transform="translate(22 -100)">
+          <ellipse cx="0" cy="0" rx="34" ry="15" fill="#d1d1d6" />
+          <ellipse cx="-16" cy="-8" rx="17" ry="13" fill="#d1d1d6" />
+          <ellipse cx="13" cy="-11" rx="19" ry="15" fill="#e5e5ea" />
         </g>
       )}
-      <text x="0" y="92" textAnchor="middle" className="fill-stone-800 text-[15px] font-semibold">{label}</text>
+      <text x="0" y="86" textAnchor="middle" fill="#1d1d1f" style={{ fontSize: 15, fontWeight: 600 }}>{label}</text>
       {spareKw !== null && (
-        <g transform="translate(0 112)">
-          <rect x="-46" y="-12" width="92" height="22" rx="11" fill={spare ? "#dcfce7" : short ? "#e0f2fe" : "#f5f5f4"} />
-          <text x="0" y="4" textAnchor="middle" className={`text-[11px] font-semibold ${spare ? "fill-emerald-800" : short ? "fill-sky-800" : "fill-stone-500"}`}>
-            {spare ? `spare ${spareKw.toFixed(2)} kW` : short ? `short ${(-spareKw).toFixed(2)} kW` : "balanced"}
+        <g transform="translate(0 108)">
+          <rect x="-48" y="-12" width="96" height="22" rx="11" fill={spare ? "#e9f8ee" : short ? "#e5f1ff" : "#f2f2f7"} />
+          <text x="0" y="4" textAnchor="middle" fill={spare ? "#248a3d" : short ? "#0060df" : "#6e6e73"} style={{ fontSize: 11.5, fontWeight: 600 }}>
+            {spare ? `${spareKw.toFixed(2)} kW spare` : short ? `${(-spareKw).toFixed(2)} kW short` : "balanced"}
           </text>
         </g>
       )}

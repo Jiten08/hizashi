@@ -14,7 +14,7 @@ Full spec: `docs/BUILD_SPEC.md`. Task list: `docs/TASKS.md`.
 | `hub/hizashi_hub/wallet/`, `settlement/`, `guard/`, `llm/` | Jiten | trust |
 | `agent/`, `hub/hizashi_hub/market/`, `clock.py`, `sim/weather.py`, `sim/pv.py`, `sim/load.py`, `sim/events.py`, `shared/.../solar.py`, `shared/.../profiles.py` | Anurag | market & agents |
 | `shared/.../crypto.py`, `hub/hizashi_hub/sim/meters.py`, `notify/`, `scripts/` | Prajval | identity & alerts |
-| `web/`, `hub/hizashi_hub/api/`, `ws.py`, `bus.py`, `db.py`, `state.py`, `app.py` | Tezash | screens & integration |
+| `web/`, `mobile/`, `hub/hizashi_hub/api/`, `ws.py`, `bus.py`, `db.py`, `state.py`, `app.py` | Tezash | screens & integration |
 
 Stubs say who fills them: `raise NotImplementedError("TODO(<task id>, <owner>)")`. Do only the task you were asked for.
 
@@ -30,8 +30,9 @@ honcho start                      # hub :8000 + agents :9012 :9014 :9016 :9018
 ```
 
 - Hub: `uvicorn hizashi_hub.app:app --port 8000`. One agent: `python -m hizashi_agent --house h12 --port 9012`.
-- Frontend dev: `cd web && npm run dev` (http://localhost:5173, proxies `/api` and `/ws` to :8000).
-- Demo with phones: `honcho -f Procfile.demo start` (needs `cloudflared`; set `PUBLIC_URL` in `.env`).
+- Dashboard dev (desktop demo only): `cd web && npm run dev` (http://localhost:5173, proxies `/api` and `/ws` to :8000).
+- Phone app (owner, one house): `cd mobile && npx expo start`, scan with Expo Go (same Wi-Fi). See `mobile/AGENTS.md` (Expo SDK 58: check versioned docs).
+- Phones reach the hub at the laptop's LAN address; across networks use `ngrok http 8000` (the hub detects it) and `npx expo start --tunnel ngrok`.
 
 ## Test
 
@@ -51,7 +52,7 @@ honcho start                      # hub :8000 + agents :9012 :9014 :9016 :9018
 - Houses: `"h12" | "h14" | "h16" | "h18"`.
 - Hub modules publish through `bus.publish(Event)`; never write to sockets directly.
 - Agents never hold private keys; they ask the wallet (`POST /api/wallet/{house}/sign`).
-- **Never compute prices, savings or settlements in `web/`.** Screens display hub events and send taps.
+- **Never compute prices, savings or settlements in `web/` or `mobile/`.** Screens display hub events and send taps.
 
 ## Git
 

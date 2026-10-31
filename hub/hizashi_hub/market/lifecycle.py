@@ -5,8 +5,8 @@ registered as clock hooks.
 GATE_CLOSED: wallets refuse new offers; agents post leftover orders;
 then the auction runs (at the first tick >= gate + AUCTION_AFTER that is also >= AUCTION_REAL_WAIT
 real seconds after gate closure, so fast speeds still leave agents time to post; at the
-latest when the block starts delivering). Pending plan approvals for windows that end
-at this block expire. SETTLED: settle every contract, update savings.
+latest when the block starts delivering). SETTLED: settle every contract, update savings.
+OPEN: plan approvals still unanswered for windows that have started lapse to `auto`.
 Outage overlapping a block sets outage=True on it (no penalties, KERC 5(c)(iii)).
 """
 import json
@@ -50,10 +50,11 @@ class Lifecycle:
     # --- clock hooks ----------------------------------------------------------------
 
     async def on_block_state(self, ref: BlockRef, old: str | None, new: str) -> None:
-        now = blocks.gate_close(ref) if new == "GATE_CLOSED" else None
-        if new == "GATE_CLOSED":
+        if new == "OPEN":
+            approvals.lapse_at_open(self.conn, ref, blocks.open_time(ref))
+        elif new == "GATE_CLOSED":
+            now = blocks.gate_close(ref)
             self._pending[ref.key] = (ref, now + AUCTION_AFTER, time.monotonic())
-            approvals.expire_through(self.conn, ref, now)
         elif new == "DELIVERING" and ref.key in self._pending:
             self._pending.pop(ref.key)
             self.run_auction(ref, blocks.block_start(ref))

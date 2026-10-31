@@ -8,11 +8,9 @@ const LOG_SIZE = 300;
 export interface HubStore extends Snapshot {
   loaded: boolean;
   connected: boolean;
-  mock: boolean;           // true when ?mock=1 — connection badge shows "mock"
   log: HubEvent[];
   setSnapshot: (s: Snapshot) => void;
   setConnected: (c: boolean) => void;
-  setMock: (m: boolean) => void;
   apply: (e: HubEvent) => void;
 }
 
@@ -89,11 +87,9 @@ export const useHubStore = create<HubStore>((set) => ({
   ...emptySnapshot,
   loaded: false,
   connected: false,
-  mock: false,
   log: [],
   setSnapshot: (snap) => set({ ...emptySnapshot, ...snap, loaded: true, log: snap.recent_events ?? [] }),
   setConnected: (connected) => set({ connected }),
-  setMock: (mock) => set({ mock }),
   apply: (e) =>
     set((s) => {
       // Unknown event types are ignored, not crashed.
