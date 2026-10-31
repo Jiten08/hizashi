@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { MandateSteppers } from "../components/MandateSteppers";
 import { NotificationsSection } from "../components/Notifications";
+import { SayItRules } from "../components/SayItRules";
 import { Button, Row, Screen, Section, Segmented, Toggle } from "../components/ui";
 import { api } from "../lib/api";
 import { useHubStore } from "../lib/store";
@@ -24,6 +25,8 @@ export default function Rules({ house, onEditSetup, onSwitchHouse }: { house: Ho
 
   return (
     <Screen title="Rules">
+      <SayItRules house={house} />
+
       <Section footer="Off means your wallet refuses every offer.">
         <Row title="Trading" last accessory={<Toggle on={!m.paused} onChange={(on) => set({ paused: !on })} label="Trading" />} />
       </Section>
@@ -56,9 +59,6 @@ export default function Rules({ house, onEditSetup, onSwitchHouse }: { house: Ho
           onClick={onEditSetup} chevron last />
       </Section>
 
-      <Section header="Say it in a sentence" footer="Coming next: type “don't buy above ₹5” and your agent proposes the limits.">
-        <Row title="Rules from a sentence" value="Soon" last />
-      </Section>
 
       <Section footer={`Weather: ${weather ?? "—"} · homes and meters simulated`}>
         <Row title="This phone is for" value={info.label} last />

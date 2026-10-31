@@ -128,6 +128,12 @@ export default function Today({ house }: { house: House }) {
               ))}
               {deal && <Pill className="bg-green text-white">✓ Deal {kwh(deal.kwh)} at {rupees(deal.price)}</Pill>}
             </div>
+            {haggle.filter((o) => hub.notes[o.offer_id]).slice(-3).map((o) => (
+              <p key={o.offer_id} className="t-footnote mt-2">
+                <span className={`font-semibold ${o.side === "ask" ? "text-orange-ink" : "text-blue"}`}>{o.house === house ? "Your agent" : houseName(o.house)}:</span>{" "}
+                <span className="!text-label">{hub.notes[o.offer_id].text}</span>
+              </p>
+            ))}
           </div>
         </Section>
       )}

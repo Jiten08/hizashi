@@ -115,9 +115,23 @@ export interface SetupResult {
   house: HouseInfo; clear_day_kwh: number; mandate: Mandate; tariffs: Tariffs; saved: boolean;
 }
 
+/** POST /api/wallet/{house}/mandate/parse: a proposal, not saved. */
+export interface MandateProposal {
+  mandate: Mandate;
+  changes: { field: string; label: string; from: string; to: string }[];
+  source: "gemini" | "rules" | "none";
+  note: string;
+}
+
 /** The owner is away, or has guests, from start to end (IST ISO times). */
 export interface Schedule {
   schedule_id: string; house: House; kind: "away" | "guests"; start: string; end: string; created_at: string;
+}
+
+/** What an agent said with one of its offers (screens only). */
+export interface NegoNote {
+  offer_id: string; negotiation_id: string; house: House; to: House | null; side: "ask" | "bid";
+  price: number; round: number; text: string; source: "gemini" | "template";
 }
 
 export interface HubEvent<T = Record<string, any>> {
@@ -151,6 +165,7 @@ export interface Snapshot {
   sim_events: SimEvent[];
   blocked: (Record<string, any> & { house: House })[];
   auctions: Record<string, Record<string, any>>;
+  notes: Record<string, NegoNote>;
   schedules: Partial<Record<House, Schedule[]>>;
 }
 
@@ -175,6 +190,7 @@ export const EV = {
   MANDATE_UPDATED: "mandate.updated",
   SIM_EVENT: "sim.event",
   HOUSE_UPDATED: "house.updated",
+  NEGO_NOTE: "nego.note",
   SCHEDULE_UPDATED: "schedule.updated",
 } as const;
 

@@ -19,12 +19,12 @@ export const emptySnapshot: Snapshot = {
   houses: {} as Snapshot["houses"], mandates: {} as Snapshot["mandates"],
   blocks: {}, forecasts: {}, plans: {}, negotiations: {}, contracts: [], settlements: [],
   savings: {}, approvals: [], flags: [], outage: null, weather_source: null, recent_events: [],
-  live: {}, sim_events: [], blocked: [], auctions: {},
+  live: {}, sim_events: [], blocked: [], auctions: {}, notes: {},
 };
 
 const DAY_RESET: Partial<HubStore> = {
   blocks: {}, contracts: [], settlements: [], negotiations: {}, approvals: [], flags: [], blocked: [],
-  savings: {}, plans: {}, live: {}, sim_events: [], auctions: {}, outage: null, log: [],
+  savings: {}, plans: {}, live: {}, sim_events: [], auctions: {}, outage: null, log: [], notes: {},
 };
 
 type Reducer = (s: HubStore, e: HubEvent) => Partial<HubStore>;
@@ -42,6 +42,7 @@ const reducers: Record<string, Reducer> = {
       ? { live: { ...s.live, [e.house]: { solar_kw: e.data.solar_kw ?? 0, use_kw: e.data.use_kw ?? 0, ts: e.sim_time, outage: !!e.data.outage } } }
       : {},
   [EV.FORECAST_UPDATED]: (s, e) => (e.house ? { forecasts: { ...s.forecasts, [e.house]: e.data.forecasts } } : {}),
+  [EV.NEGO_NOTE]: (s, e) => (e.data.note ? { notes: { ...s.notes, [e.data.note.offer_id]: e.data.note } } : {}),
   [EV.PLAN_UPDATED]: (s, e) => (e.house ? { plans: { ...s.plans, [e.house]: e.data.windows } } : {}),
   [EV.NEGO_OFFER]: (s, e) => {
     const o = e.data.offer;

@@ -1,6 +1,6 @@
 // REST calls to the hub. The app is served by the hub at /app/, so every path is same-origin.
 // The phone only sends taps; the hub computes every price and saving.
-import type { Approval, ApprovalRow, House, LedgerEntry, Mandate, Schedule, SetupBody, SetupResult, Snapshot } from "./types";
+import type { Approval, ApprovalRow, House, LedgerEntry, Mandate, MandateProposal, Schedule, SetupBody, SetupResult, Snapshot } from "./types";
 
 // ngrok's free tier puts a warning page in front of browsers unless this header is sent.
 const HEADERS = { "ngrok-skip-browser-warning": "1" };
@@ -26,6 +26,7 @@ export const api = {
   ledger: (house: House) => req<LedgerEntry[]>("GET", `/api/ledger?house=${house}`),
   verify: () => req<{ ok: boolean; broken_at?: number; entries?: number }>("GET", "/api/ledger/verify"),
   putMandate: (house: House, m: Mandate) => req<Mandate>("PUT", `/api/wallet/${house}/mandate`, m),
+  parseMandate: (house: House, text: string) => req<MandateProposal>("POST", `/api/wallet/${house}/mandate/parse`, { text }),
   setup: (house: House, body: SetupBody) => req<SetupResult>("POST", `/api/houses/${house}/setup`, body),
   addSchedule: (house: House, body: { kind: Schedule["kind"]; day: string; start: string; end: string }) =>
     req<Schedule>("POST", `/api/schedules/${house}`, body),

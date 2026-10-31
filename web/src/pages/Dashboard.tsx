@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity } from "../components/Activity";
 import { ConnectSheet } from "../components/ConnectSheet";
+import { HaggleChat } from "../components/HaggleChat";
 import { HouseSvg } from "../components/HouseSvg";
 import { Button, Card, Clock, Icon, Logo, Segmented, toast } from "../components/ui";
 import { useHub } from "../hooks/useHub";
@@ -126,8 +127,9 @@ export default function Dashboard() {
 
         {HOUSES.map((h) => <HouseCard key={h} house={h} />)}
 
-        <Card title="Activity" className="col-span-8"><Activity events={hub.log} /></Card>
-        <Card title="Try it" className="col-span-4">
+        <Card title="Activity" className="col-span-5"><Activity events={hub.log} /></Card>
+        <Card title="Agents haggling" className="col-span-4"><HaggleChat /></Card>
+        <Card title="Try it" className="col-span-3">
           <div className="grid gap-2">
             <Button icon="cloud" onClick={() => run("Cloud over House 12", () => api.consoleEvent("cloud", "h12", 45))}>Cloud over House 12 (45 min)</Button>
             <Button icon="bolt" onClick={() => run("AC on at House 14", () => api.consoleEvent("ac", "h14", 120))}>AC on at House 14 (2 h)</Button>

@@ -20,6 +20,7 @@ CONSOLE_COMMAND = "console.command"
 MANDATE_UPDATED = "mandate.updated"
 SIM_EVENT = "sim.event"            # console cloud / ac / guests / away / outage started
 HOUSE_UPDATED = "house.updated"    # onboarding changed a roof, buyback rate or metering
+NEGO_NOTE = "nego.note"            # what an agent said with an offer (haggle feed)
 SCHEDULE_UPDATED = "schedule.updated"  # an owner planned (or dropped) time away or guests
 
 ALL = (
@@ -27,6 +28,7 @@ ALL = (
     NEGO_OFFER, NEGO_RESULT, WALLET_BLOCKED, APPROVAL_REQUESTED, APPROVAL_RESOLVED,
     CONTRACT_BOOKED, MARKET_CLEARED, SETTLEMENT_DONE, SAVINGS_UPDATED, GUARD_FLAG,
     GRID_OUTAGE, CONSOLE_COMMAND, MANDATE_UPDATED, SIM_EVENT, HOUSE_UPDATED, SCHEDULE_UPDATED,
+    NEGO_NOTE,
 )
 
 # Events an agent socket receives (section 6.1); the scoped ones only for its own house.

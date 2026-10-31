@@ -45,6 +45,8 @@ class Runtime:
         self.schedules: list[Schedule] = []             # the owner's away / guests plans
         self.collude: dict | None = None                # {"price", "blocks"} while the collusion demo runs
 
+        self.hub.context_fn = self.offer_context
+
         # Load initial street & mandates synchronously from local data
         try:
             self.houses = street.load_houses()
@@ -84,6 +86,13 @@ class Runtime:
                 rem = self.remaining_sell.get(b_ref.index, 0.0)
                 if rem > config.MIN_TRADE_KWH:
                     asyncio.create_task(self.negotiate_sell(b_ref))
+
+    def offer_context(self, offer: Offer) -> dict:
+        """What the agent expects in the offer's block (for its voice line; no limits)."""
+        fc = self.forecasts.get(offer.block.index)
+        if fc is None:
+            return {}
+        return {"spare_kwh": round(fc.solar_p50 - fc.use_p50, 3), "solar_kwh": round(fc.solar_p50, 3)}
 
     async def load_schedules(self) -> list[float]:
         """Per-block use factors for today from the owner's schedule (1.0 if the hub can't say)."""

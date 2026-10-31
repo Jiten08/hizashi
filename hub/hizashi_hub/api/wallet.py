@@ -6,6 +6,7 @@ from pydantic import BaseModel, ValidationError
 from hizashi_shared.models import HOUSES, Contract, Mandate, Offer, PlanWindow
 
 from .. import clock
+from ..llm import mandate_parser
 from .. import state as hub_state
 from ..wallet import approvals, checks, signer
 from ..wallet import mandate as mandates
@@ -80,5 +81,8 @@ async def put_mandate(request: Request, house: str, mandate: Mandate) -> Mandate
 
 
 @router.post("/{house}/mandate/parse")
-def parse_mandate(house: str, body: ParseBody) -> Mandate:
-    raise NotImplementedError("TODO(N4, Tezash)")
+async def parse_mandate(request: Request, house: str, body: ParseBody) -> dict:
+    """The owner's sentence -> a proposed mandate + the changes (not saved; Save = PUT /mandate).
+    -> {"mandate", "changes": [{"field", "label", "from", "to"}], "source": "gemini"|"rules"|"none", "note"}"""
+    current = mandates.current(request.app.state.db, _house(house))
+    return (await mandate_parser.parse(body.text, current)).model_dump(mode="json")
