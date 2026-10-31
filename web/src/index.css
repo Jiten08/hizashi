@@ -1,60 +1,45 @@
 @import "tailwindcss";
-@import "@heroui/styles";
 
-/* Hizashi theme over HeroUI's light theme: amber accent (the sun), warm neutral surfaces. */
-:root,
-[data-theme="light"] {
-  --accent: oklch(0.68 0.155 68);            /* #d98a04 */
-  --accent-hover: oklch(0.63 0.15 66);
-  --accent-foreground: oklch(0.99 0.01 85);
-  --accent-soft: oklch(0.96 0.045 85);
-  --accent-soft-foreground: oklch(0.47 0.11 60);
-  --accent-soft-hover: oklch(0.93 0.06 82);
-  --background: oklch(0.985 0.006 85);
-  --focus: oklch(0.68 0.155 68);
-  --radius: 0.75rem;
-}
-
+/* Apple-style light palette, shared with the phone app (mobile/src/lib/theme.ts). */
 @theme {
-  --color-sun: #d98a04;
-  --color-sun-soft: #fdf3dd;
-  --color-ink: #1c1917;
-  --color-grid: #2563eb;
-  --font-sans: "Inter var", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-canvas: #f5f5f7;
+  --color-card: #ffffff;
+  --color-ink: #1d1d1f;
+  --color-ink-2: #6e6e73;
+  --color-ink-3: #aeaeb2;
+  --color-hair: rgba(0, 0, 0, 0.08);
+  --color-fill: rgba(120, 120, 128, 0.12);
+  --color-sun: #ff9500;
+  --color-sun-soft: #fff4e0;
+  --color-sun-ink: #9a5b00;
+  --color-leaf: #34c759;
+  --color-leaf-ink: #248a3d;
+  --color-leaf-soft: #e9f8ee;
+  --color-sky: #007aff;
+  --color-sky-soft: #e5f1ff;
+  --color-alert: #ff3b30;
+  --color-alert-soft: #ffeceb;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radius-card: 18px;
 }
 
-html {
-  background: var(--background);
+html, body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
 }
 
-body {
-  @apply text-ink antialiased;
-  background: var(--background);
-  font-feature-settings: "tnum" 1, "cv11" 1;
+.num { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+.card {
+  background: var(--color-card);
+  border-radius: var(--radius-card);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 20px rgba(0, 0, 0, 0.04);
 }
 
-.num {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-
-/* Sun glow behind the savings figure and on producing roofs. */
-@keyframes glow {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 0.9; }
-}
-.sun-glow {
-  animation: glow 3.2s ease-in-out infinite;
-}
-
-@keyframes pop {
-  0% { transform: scale(0.96); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
-.pop-in {
-  animation: pop 0.22s ease-out;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sun-glow, .pop-in { animation: none; }
-}
+@keyframes rise { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+.rise { animation: rise 0.25s ease-out; }
+@keyframes breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.9; } }
+.breathe { animation: breathe 3.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .rise, .breathe { animation: none; } }

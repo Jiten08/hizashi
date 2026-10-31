@@ -1,7 +1,5 @@
 // Fetch helpers. Screens only send taps; the hub computes everything.
-import type {
-  ApprovalRow, House, LedgerEntry, Mandate, SetupBody, SetupResult, Snapshot, Tariffs,
-} from "./types";
+import type { House, LedgerEntry, Snapshot } from "./types";
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -27,10 +25,7 @@ export const api = {
     req("POST", `/api/approvals/${approvalId}`, { decision, channel: "app" }),
   verifyLedger: () => req<{ ok: boolean; broken_at?: number; entries?: number }>("GET", "/api/ledger/verify"),
   ledger: (house?: House) => req<LedgerEntry[]>("GET", `/api/ledger${house ? `?house=${house}` : ""}`),
-  approvals: (house: House) => req<ApprovalRow[]>("GET", `/api/approvals?house=${house}`),
-  putMandate: (house: House, m: Mandate) => req<Mandate>("PUT", `/api/wallet/${house}/mandate`, m),
-  setup: (house: House, body: SetupBody) => req<SetupResult>("POST", `/api/houses/${house}/setup`, body),
-  tariffs: () => req<Tariffs>("GET", "/api/houses/tariffs"),
+  connect: () => req<{ hub: string | null; houses: { house: House; label: string; payload: { hub: string | null; house: House } }[] }>("GET", "/api/connect"),
 };
 
 export function wsUrl(query: string): string {
