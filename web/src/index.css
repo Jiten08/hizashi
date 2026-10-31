@@ -1,10 +1,60 @@
 @import "tailwindcss";
+@import "@heroui/styles";
+
+/* Hizashi theme over HeroUI's light theme: amber accent (the sun), warm neutral surfaces. */
+:root,
+[data-theme="light"] {
+  --accent: oklch(0.68 0.155 68);            /* #d98a04 */
+  --accent-hover: oklch(0.63 0.15 66);
+  --accent-foreground: oklch(0.99 0.01 85);
+  --accent-soft: oklch(0.96 0.045 85);
+  --accent-soft-foreground: oklch(0.47 0.11 60);
+  --accent-soft-hover: oklch(0.93 0.06 82);
+  --background: oklch(0.985 0.006 85);
+  --focus: oklch(0.68 0.155 68);
+  --radius: 0.75rem;
+}
 
 @theme {
   --color-sun: #d98a04;
+  --color-sun-soft: #fdf3dd;
+  --color-ink: #1c1917;
+  --color-grid: #2563eb;
+  --font-sans: "Inter var", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html {
+  background: var(--background);
 }
 
 body {
-  @apply bg-[#fffaf0] text-stone-900 antialiased;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  @apply text-ink antialiased;
+  background: var(--background);
+  font-feature-settings: "tnum" 1, "cv11" 1;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Sun glow behind the savings figure and on producing roofs. */
+@keyframes glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.9; }
+}
+.sun-glow {
+  animation: glow 3.2s ease-in-out infinite;
+}
+
+@keyframes pop {
+  0% { transform: scale(0.96); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.pop-in {
+  animation: pop 0.22s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sun-glow, .pop-in { animation: none; }
 }

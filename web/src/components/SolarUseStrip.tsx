@@ -1,47 +1,30 @@
-/**
- * SolarUseStrip — live solar kW and household use kW from the latest meter.reading.
- *
- * Spec: readings carry watt-hours per simulated minute.
- *   kW = wh * 60 / 1000
- *
- * Layout: two stat cells side by side, amber for solar, sky-blue for use.
- */
-import type { HubEvent } from "../lib/types";
+// Live solar and use from the hub's latest meter.reading for this house.
+import type { Live } from "../lib/types";
+import { Icon } from "./ui";
 
-function whToKw(wh: number): number {
-  return (wh * 60) / 1000;
-}
-
-interface Props {
-  meterEvent?: HubEvent; // latest meter.reading for this house
-}
-
-export function SolarUseStrip({ meterEvent }: Props) {
-  const d = meterEvent?.data as
-    | { solar_wh?: number; import_wh?: number; export_wh?: number }
-    | undefined;
-
-  const solarKw = d?.solar_wh !== undefined ? whToKw(d.solar_wh) : null;
-  // import_wh is grid import; use = solar - export + import
-  const useKw =
-    d?.solar_wh !== undefined && d?.import_wh !== undefined && d?.export_wh !== undefined
-      ? whToKw(d.solar_wh - d.export_wh + d.import_wh)
-      : null;
-
-  const fmt = (v: number | null) =>
-    v !== null ? `${v.toFixed(2)} kW` : "— kW";
-
+export function SolarUseStrip({ live, hasSolar }: { live?: Live; hasSolar: boolean }) {
+  const solar = live?.solar_kw ?? 0;
+  const use = live?.use_kw ?? 0;
+  const net = solar - use;
+  const fmt = (v: number) => (live ? v.toFixed(2) : "—");
   return (
-    <div className="grid grid-cols-2 gap-3">
-      <div className="rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200">
-        <p className="text-xs font-medium text-amber-700 uppercase tracking-wide">☀ Solar</p>
-        <p className="mt-1 text-3xl font-bold tabular-nums text-amber-900">{fmt(solarKw)}</p>
-      </div>
-      <div className="rounded-2xl bg-sky-50 p-4 ring-1 ring-sky-200">
-        <p className="text-xs font-medium text-sky-700 uppercase tracking-wide">⚡ Use</p>
-        <p className="mt-1 text-3xl font-bold tabular-nums text-sky-900">{fmt(useKw)}</p>
-      </div>
+    <div className="grid grid-cols-3 gap-2">
+      <Cell icon="sun" label="Solar" value={hasSolar ? fmt(solar) : "—"} unit="kW" tone="bg-sun-soft text-amber-900" />
+      <Cell icon="home" label="Use" value={fmt(use)} unit="kW" tone="bg-white text-ink" />
+      <Cell icon={net >= 0 ? "arrow" : "bolt"} label={live?.outage ? "Outage" : net >= 0 ? "Spare" : "From grid"}
+        value={live ? Math.abs(net).toFixed(2) : "—"} unit="kW"
+        tone={live?.outage ? "bg-stone-200 text-stone-600" : net >= 0 ? "bg-emerald-50 text-emerald-900" : "bg-sky-50 text-sky-900"} />
     </div>
   );
 }
 
+function Cell({ icon, label, value, unit, tone }: { icon: "sun" | "home" | "arrow" | "bolt"; label: string; value: string; unit: string; tone: string }) {
+  return (
+    <div className={`rounded-2xl p-3 ring-1 ring-black/5 ${tone}`}>
+      <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide opacity-70">
+        <Icon name={icon} className="h-3.5 w-3.5" /> {label}
+      </p>
+      <p className="num mt-1 text-xl font-bold">{value}<span className="ml-0.5 text-xs font-medium opacity-60">{unit}</span></p>
+    </div>
+  );
+}

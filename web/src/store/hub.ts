@@ -10,34 +10,39 @@ export interface HubStore extends Snapshot {
   connected: boolean;
   mock: boolean;           // true when ?mock=1 — connection badge shows "mock"
   log: HubEvent[];
-  blocked: HubEvent[];
-  meters: Record<string, HubEvent>;
   setSnapshot: (s: Snapshot) => void;
   setConnected: (c: boolean) => void;
   setMock: (m: boolean) => void;
   apply: (e: HubEvent) => void;
 }
 
-const empty: Snapshot = {
+export const emptySnapshot: Snapshot = {
   sim_time: null, speed: 60, running: false, public_url: null,
   houses: {} as Snapshot["houses"], mandates: {} as Snapshot["mandates"],
   blocks: {}, forecasts: {}, plans: {}, negotiations: {}, contracts: [], settlements: [],
   savings: {}, approvals: [], flags: [], outage: null, weather_source: null, recent_events: [],
+  live: {}, sim_events: [], blocked: [], auctions: {},
+};
+
+const DAY_RESET: Partial<HubStore> = {
+  blocks: {}, contracts: [], settlements: [], negotiations: {}, approvals: [], flags: [], blocked: [],
+  savings: {}, plans: {}, live: {}, sim_events: [], auctions: {}, outage: null, log: [],
 };
 
 type Reducer = (s: HubStore, e: HubEvent) => Partial<HubStore>;
 
 const reducers: Record<string, Reducer> = {
-  [EV.CLOCK_TICK]: (_s, e) => ({
+  [EV.CLOCK_TICK]: (s, e) => ({
     sim_time: e.sim_time,
-    speed: e.data.speed ?? _s.speed,
-    running: e.data.running ?? _s.running,
-    ...(e.data.reset
-      ? { blocks: {}, contracts: [], settlements: [], negotiations: {}, approvals: [], flags: [], blocked: [], log: [] }
-      : {}),
+    speed: e.data.speed ?? s.speed,
+    running: e.data.running ?? s.running,
+    ...(e.data.reset ? DAY_RESET : {}),
   }),
   [EV.BLOCK_STATE]: (s, e) => ({ blocks: { ...s.blocks, [e.data.block]: e.data.state } }),
-  [EV.METER_READING]: (s, e) => ({ meters: { ...s.meters, [e.house ?? ""]: e } }),
+  [EV.METER_READING]: (s, e) =>
+    e.house
+      ? { live: { ...s.live, [e.house]: { solar_kw: e.data.solar_kw ?? 0, use_kw: e.data.use_kw ?? 0, ts: e.sim_time, outage: !!e.data.outage } } }
+      : {},
   [EV.FORECAST_UPDATED]: (s, e) => (e.house ? { forecasts: { ...s.forecasts, [e.house]: e.data.forecasts } } : {}),
   [EV.PLAN_UPDATED]: (s, e) => (e.house ? { plans: { ...s.plans, [e.house]: e.data.windows } } : {}),
   [EV.NEGO_OFFER]: (s, e) => {
@@ -47,7 +52,9 @@ const reducers: Record<string, Reducer> = {
     if (prev.some((x) => x.offer_id === o.offer_id)) return {};
     return { negotiations: { ...s.negotiations, [o.negotiation_id]: [...prev, o] } };
   },
-  [EV.WALLET_BLOCKED]: (s, e) => ({ blocked: [...s.blocked, e].slice(-20) }),
+  [EV.WALLET_BLOCKED]: (s, e) => ({
+    blocked: [...s.blocked, { house: e.house!, sim_time: e.sim_time, ...e.data }].slice(-50),
+  }),
   [EV.APPROVAL_REQUESTED]: (s, e) => upsertApproval(s, e),
   [EV.APPROVAL_RESOLVED]: (s, e) => upsertApproval(s, e),
   [EV.CONTRACT_BOOKED]: (s, e) => {
@@ -55,11 +62,21 @@ const reducers: Record<string, Reducer> = {
     if (!c || s.contracts.some((x) => x.contract_id === c.contract_id)) return {};
     return { contracts: [...s.contracts, c] };
   },
-  [EV.SETTLEMENT_DONE]: (s, e) => ({ settlements: [...s.settlements, e.data as any] }),
-  [EV.SAVINGS_UPDATED]: (s, e) => (e.house ? { savings: { ...s.savings, [e.house]: e.data } } : {}),
+  [EV.SETTLEMENT_DONE]: (s, e) => {
+    const st = e.data.settlement;
+    if (!st || s.settlements.some((x) => x.contract_id === st.contract_id)) return {};
+    return {
+      settlements: [...s.settlements, st],
+      contracts: s.contracts.map((c) => (c.contract_id === st.contract_id ? { ...c, settled: true } : c)),
+    };
+  },
+  [EV.SAVINGS_UPDATED]: (s, e) => (e.house ? { savings: { ...s.savings, [e.house]: e.data as any } } : {}),
+  [EV.MARKET_CLEARED]: (s, e) => ({ auctions: { ...s.auctions, [e.data.block]: e.data } }),
   [EV.GUARD_FLAG]: (s, e) => ({ flags: [...s.flags, e.data] }),
   [EV.GRID_OUTAGE]: (_s, e) => ({ outage: e.data.active ? e.data : null }),
+  [EV.SIM_EVENT]: (s, e) => ({ sim_events: [...s.sim_events, e.data.event] }),
   [EV.MANDATE_UPDATED]: (s, e) => (e.house ? { mandates: { ...s.mandates, [e.house]: e.data.mandate } } : {}),
+  [EV.HOUSE_UPDATED]: (s, e) => (e.house ? { houses: { ...s.houses, [e.house]: e.data.house } } : {}),
 };
 
 function upsertApproval(s: HubStore, e: HubEvent): Partial<HubStore> {
@@ -69,24 +86,20 @@ function upsertApproval(s: HubStore, e: HubEvent): Partial<HubStore> {
 }
 
 export const useHubStore = create<HubStore>((set) => ({
-  ...empty,
+  ...emptySnapshot,
   loaded: false,
   connected: false,
   mock: false,
   log: [],
-  blocked: [],
-  meters: {},
-  setSnapshot: (snap) => set({ ...snap, loaded: true, log: snap.recent_events ?? [] }),
+  setSnapshot: (snap) => set({ ...emptySnapshot, ...snap, loaded: true, log: snap.recent_events ?? [] }),
   setConnected: (connected) => set({ connected }),
   setMock: (mock) => set({ mock }),
   apply: (e) =>
     set((s) => {
       // Unknown event types are ignored, not crashed.
       const patch = reducers[e.type]?.(s, e) ?? {};
-      const isClock = e.type === EV.CLOCK_TICK;
-      const log = isClock
-        ? patch.log ?? s.log
-        : [...(patch.log ?? s.log), e].slice(-LOG_SIZE);
+      const quiet = e.type === EV.CLOCK_TICK || e.type === EV.METER_READING;
+      const log = quiet ? patch.log ?? s.log : [...(patch.log ?? s.log), e].slice(-LOG_SIZE);
       return { ...patch, log };
     }),
 }));

@@ -1,55 +1,68 @@
-import { blockLabel } from "../lib/api";
-import type { BlockState } from "../lib/types";
+// The live block: where it is in its lifecycle and what this house has contracted in it.
+import { Card, Chip } from "@heroui/react";
+import { blockLabel, kwh, rupees } from "../lib/api";
+import type { BlockState, Contract, House, Settlement } from "../lib/types";
 
-export const STATE_STYLE: Record<BlockState, string> = {
-  PLANNED: "bg-stone-100 text-stone-500",
-  OPEN: "bg-amber-100 text-amber-800",
-  GATE_CLOSED: "bg-orange-200 text-orange-900",
-  DELIVERING: "bg-sun text-white",
-  SETTLED: "bg-emerald-100 text-emerald-800",
+const STEPS: { state: BlockState; label: string }[] = [
+  { state: "PLANNED", label: "Planned" },
+  { state: "OPEN", label: "Deals" },
+  { state: "GATE_CLOSED", label: "Gate" },
+  { state: "DELIVERING", label: "Live" },
+  { state: "SETTLED", label: "Settled" },
+];
+
+const HINT: Record<BlockState, string> = {
+  PLANNED: "Your agent has a plan for this block.",
+  OPEN: "Agents are haggling. Deals close an hour before the block.",
+  GATE_CLOSED: "Schedule frozen; leftovers go to the street auction.",
+  DELIVERING: "Power is flowing now. Meters are signing every minute.",
+  SETTLED: "Settled under KERC 8(g).",
 };
 
-const STATE_TEXT: Record<BlockState, string> = {
-  PLANNED: "Planned",
-  OPEN: "Open for deals",
-  GATE_CLOSED: "Gate closed",
-  DELIVERING: "Delivering now",
-  SETTLED: "Settled",
-};
-
-/** One block: state, promised and contracted kWh (promised/contracted filled from R1.7). */
-export function BlockCard({ index, state, promised, contracted }: {
-  index: number; state: BlockState; promised?: number; contracted?: number;
+export function BlockCard({ index, state, house, contracts, settlements }: {
+  index: number; state: BlockState; house: House; contracts: Contract[]; settlements: Settlement[];
 }) {
+  const at = STEPS.findIndex((s) => s.state === state);
+  const mine = contracts.filter((c) => c.block.index === index && (c.seller === house || c.buyer === house));
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-lg font-semibold">{blockLabel(index)}</span>
-        <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATE_STYLE[state]}`}>{STATE_TEXT[state]}</span>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-stone-600">
-        <div>Promised <b className="text-stone-900">{promised !== undefined ? `${promised.toFixed(2)} kWh` : "—"}</b></div>
-        <div>Contracted <b className="text-stone-900">{contracted !== undefined ? `${contracted.toFixed(2)} kWh` : "—"}</b></div>
-      </div>
-    </div>
-  );
-}
-
-/** All tradable blocks of the day as small coloured cells. */
-export function BlockStrip({ blocks }: { blocks: Record<string, BlockState> }) {
-  const entries = Object.entries(blocks).sort(([a], [b]) => a.localeCompare(b));
-  if (!entries.length) return <p className="text-sm text-stone-500">Waiting for the market to open…</p>;
-  return (
-    <div className="grid grid-cols-13 gap-1">
-      {entries.map(([key, state]) => {
-        const index = Number(key.split("#")[1]);
-        return (
-          <div key={key} title={`${blockLabel(index)} · ${state}`}
-            className={`h-6 rounded text-[9px] leading-6 text-center ${STATE_STYLE[state]}`}>
-            {index % 4 === 0 ? String(index / 4).padStart(2, "0") : ""}
+    <Card>
+      <Card.Content className="gap-3 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-stone-500">Now</p>
+            <p className="num text-xl font-semibold">{blockLabel(index)}</p>
           </div>
-        );
-      })}
-    </div>
+          <Chip size="sm" variant="soft" color={state === "DELIVERING" ? "accent" : state === "SETTLED" ? "success" : "default"}>
+            {STEPS[at]?.label ?? state}
+          </Chip>
+        </div>
+        <ol className="grid grid-cols-5 gap-1" aria-label="Block lifecycle">
+          {STEPS.map((s, i) => (
+            <li key={s.state} className="flex flex-col gap-1">
+              <span className={`h-1.5 rounded-full ${i < at ? "bg-sun/60" : i === at ? "bg-sun" : "bg-stone-200"}`} />
+              <span className={`text-[10px] ${i === at ? "font-semibold text-ink" : "text-stone-400"}`}>{s.label}</span>
+            </li>
+          ))}
+        </ol>
+        <p className="text-sm text-stone-600">{HINT[state]}</p>
+        {mine.length > 0 && (
+          <ul className="divide-y divide-stone-100 rounded-xl bg-stone-50 px-3">
+            {mine.map((c) => {
+              const s = settlements.find((x) => x.contract_id === c.contract_id);
+              const selling = c.seller === house;
+              return (
+                <li key={c.contract_id} className="flex items-center justify-between py-2 text-sm">
+                  <span>{selling ? "Selling to" : "Buying from"} <b>{(selling ? c.buyer : c.seller).replace("h", "House ")}</b></span>
+                  <span className="num font-medium">
+                    {kwh(c.kwh)} · {rupees(c.price)}
+                    {s && s.shortfall_kwh > 0 && <span className="ml-1 text-red-600">short {s.shortfall_kwh.toFixed(2)}</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card.Content>
+    </Card>
   );
 }
