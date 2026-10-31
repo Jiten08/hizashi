@@ -140,7 +140,9 @@ function start() {
   client.state().then((snap) => {
     if (gen !== generation) return;
     set({ ...empty, ...snap, loaded: true });
-    ws = new WebSocket(client.wsUrl(conn.house));
+    // React Native's WebSocket takes headers as a third argument; the header keeps ngrok's
+    // browser warning page out of the way.
+    ws = new (WebSocket as any)(client.wsUrl(conn.house), undefined, { headers: { "ngrok-skip-browser-warning": "1" } }) as WebSocket;
     ws.onopen = () => set({ connected: true });
     ws.onmessage = (m) => {
       const e = JSON.parse(String(m.data)) as HubEvent;
