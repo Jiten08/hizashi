@@ -15,17 +15,20 @@ cd web && npm install && npm run build && cd ..
 cd mobile && npm install && cd ..
 ```
 
-Three terminals for the demo:
+Two terminals for the demo (laptop and phones on the same Wi-Fi):
 
 ```bash
 python -X utf8 -m honcho start          # 1. hub :8000 + the four house agents
-ngrok http 8000                         # 2. phones reach the hub (the hub detects the URL itself)
-cd mobile && npx expo start --tunnel ngrok   # 3. phone app: scan its QR with Expo Go
+cd mobile && npx expo start             # 2. phone app: every phone scans this QR with Expo Go
 ```
 
 - **Laptop:** http://localhost:8000/ is the street dashboard (desktop demo); `/console` has every control.
-- **Phone:** in the Hizashi app tap **Scan house code** and scan a house on the dashboard's **Connect a phone**.
-- Same Wi-Fi only? Skip ngrok and `--tunnel`, open the dashboard via the laptop's IP (http://192.168.x.x:8000).
+- **Phones:** scan Expo's QR (iPhone: Camera app; Android: inside Expo Go). In Hizashi tap
+  **Scan house code** and scan a house on the dashboard's **Connect a phone**. Any number of phones.
+- First run on Windows: allow Python and Node through the firewall on **private** networks, and
+  make sure the Wi-Fi is set to Private.
+- Phones on another network (mobile data, a guest Wi-Fi that isolates devices)? Add tunnels:
+  `ngrok http 8000` for the hub (detected by itself) and `npx expo start --tunnel ngrok` for the app.
 
 Copy `.env.example` to `.env` to change defaults (sim day, speed, tariff, tokens, API keys). No API keys are needed to run.
 

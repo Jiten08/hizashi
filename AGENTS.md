@@ -31,8 +31,8 @@ honcho start                      # hub :8000 + agents :9012 :9014 :9016 :9018
 
 - Hub: `uvicorn hizashi_hub.app:app --port 8000`. One agent: `python -m hizashi_agent --house h12 --port 9012`.
 - Dashboard dev (desktop demo only): `cd web && npm run dev` (http://localhost:5173, proxies `/api` and `/ws` to :8000).
-- Phone app (owner, one house): `cd mobile && npx expo start --tunnel ngrok`, open in Expo Go. See `mobile/AGENTS.md` (Expo SDK 58: check versioned docs).
-- Phones reach the hub through `ngrok http 8000` (or `honcho -f Procfile.demo start`); the hub reads the tunnel URL from ngrok itself.
+- Phone app (owner, one house): `cd mobile && npx expo start`, scan with Expo Go (same Wi-Fi). See `mobile/AGENTS.md` (Expo SDK 58: check versioned docs).
+- Phones reach the hub at the laptop's LAN address; across networks use `ngrok http 8000` (the hub detects it) and `npx expo start --tunnel ngrok`.
 
 ## Test
 

@@ -39,18 +39,18 @@ export function ConnectSheet({ onClose }: { onClose: () => void }) {
                 </div>
               ))}
             </div>
-            <p className="mt-5 text-[13px] text-ink-2">Phones reach the hub at <span className="font-mono text-ink">{hub}</span></p>
+            <p className="mt-5 text-[13px] text-ink-2">Phones reach the hub at <span className="font-mono text-ink">{hub}</span>{hub.startsWith("http://") ? " (same Wi-Fi only)" : ""}</p>
           </>
         ) : (
           <div className="mt-6 rounded-2xl bg-sun-soft p-5 text-[15px] text-sun-ink">
-            <p className="font-semibold">Phones can't reach this laptop yet.</p>
-            <p className="mt-1">Start a tunnel in another terminal: <span className="font-mono">ngrok http 8000</span>. The codes appear here by themselves.</p>
+            <p className="font-semibold">This laptop isn't on a network phones can reach.</p>
+            <p className="mt-1">Join the same Wi-Fi as the phones, or run <span className="font-mono">ngrok http 8000</span>. The codes appear here by themselves.</p>
           </div>
         )}
 
         <ol className="mt-6 grid grid-cols-3 gap-4 text-[13px] text-ink-2">
           <li className="rounded-2xl bg-canvas p-4"><b className="block text-ink">1 · Get Expo Go</b>Free from the App Store or Play Store.</li>
-          <li className="rounded-2xl bg-canvas p-4"><b className="block text-ink">2 · Open the app</b>Scan the Expo code printed by <span className="font-mono">npx expo start --tunnel ngrok</span> in <span className="font-mono">mobile/</span>.</li>
+          <li className="rounded-2xl bg-canvas p-4"><b className="block text-ink">2 · Open the app</b>Scan the Expo code printed by <span className="font-mono">npx expo start</span> in <span className="font-mono">mobile/</span> (same Wi-Fi).</li>
           <li className="rounded-2xl bg-canvas p-4"><b className="block text-ink">3 · Pick your house</b>In Hizashi, scan one of the codes above.</li>
         </ol>
       </div>
