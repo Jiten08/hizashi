@@ -1,0 +1,25 @@
+[project]
+name = "hizashi"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115", "uvicorn[standard]>=0.30", "httpx>=0.27", "pydantic>=2.7",
+  "a2a-sdk[http-server]==1.2.1",
+  "pynacl>=1.5", "pvlib>=0.11", "pandas>=2.2", "numpy>=1.26",
+  "python-dotenv>=1.0", "websockets>=12",
+  "twilio>=9", "google-genai>=1.0", "groq>=0.11",
+]
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "honcho>=2"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["shared", "hub", "agent"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

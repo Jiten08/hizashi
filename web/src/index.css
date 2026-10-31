@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sun: #d98a04;
+}
+
+body {
+  @apply bg-[#fffaf0] text-stone-900 antialiased;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}

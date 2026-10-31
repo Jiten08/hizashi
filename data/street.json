@@ -1,0 +1,118 @@
+{
+  "street": "Banashankari demo street",
+  "transformers": [
+    "T1"
+  ],
+  "market_pubkey": "B3y6g2Wub1PTeGUNVpEuSrjQsluTGzPUfnjWC9h82ws=",
+  "houses": [
+    {
+      "id": "h12",
+      "label": "House 12",
+      "transformer": "T1",
+      "roof": {
+        "kwp": 5.0,
+        "tilt": 13,
+        "azimuth": 180,
+        "inverter_kw": 5.0
+      },
+      "profile": "couple_away_day",
+      "buyback_rate": 3.89,
+      "metering": "net",
+      "agent_url": "http://127.0.0.1:9012/",
+      "meter_pubkey": "Pcy4E4fdQNFeL8xGHhp37skwu0vtghxco7YlIC/XyOE=",
+      "wallet_pubkey": "kvOFtJoTcTLNloYFawku0bJkfqxB988Zjh6G+jpgHJc="
+    },
+    {
+      "id": "h14",
+      "label": "House 14",
+      "transformer": "T1",
+      "roof": null,
+      "profile": "wfh_ac",
+      "buyback_rate": null,
+      "metering": "none",
+      "agent_url": "http://127.0.0.1:9014/",
+      "meter_pubkey": "GmVa7lbtBrUy27dP6ZS3oQzc+kfcvStjxg6wVC8SA74=",
+      "wallet_pubkey": "ZjvuZoPajSSXKxI6JGayBi+MnnB11VIr7SL29JWpzrk="
+    },
+    {
+      "id": "h16",
+      "label": "House 16",
+      "transformer": "T1",
+      "roof": {
+        "kwp": 3.0,
+        "tilt": 15,
+        "azimuth": 90,
+        "inverter_kw": 3.0
+      },
+      "profile": "family_medium",
+      "buyback_rate": 2.14,
+      "metering": "net",
+      "agent_url": "http://127.0.0.1:9016/",
+      "meter_pubkey": "5T2sn/XkIC7g/exS6DPk2W3iRQbqGYEaBH1JDUacFqU=",
+      "wallet_pubkey": "DXYlhmZ+1//mFwqfYr2Xa24PH+E53/TjR+nW6YDHz9I="
+    },
+    {
+      "id": "h18",
+      "label": "House 18",
+      "transformer": "T1",
+      "roof": {
+        "kwp": 2.0,
+        "tilt": 13,
+        "azimuth": 180,
+        "inverter_kw": 2.0
+      },
+      "profile": "heavy_appliances",
+      "buyback_rate": 1.96,
+      "metering": "net",
+      "agent_url": "http://127.0.0.1:9018/",
+      "meter_pubkey": "RRlJuGj7JMzZFjNXSuh+5SAhLVLNIbGStceU8oQlZlA=",
+      "wallet_pubkey": "DaLGEtxcZqLC8/JQAcm/uS8uFMpKArUMpnUQptOm0gU="
+    }
+  ],
+  "mandates": [
+    {
+      "house": "h12",
+      "version": 1,
+      "min_sell_price": 4.2,
+      "max_buy_price": 5.5,
+      "daily_budget": 50.0,
+      "max_promise_kwh": 1.0,
+      "approve_above": 10.0,
+      "counterparties": "same_transformer",
+      "paused": false
+    },
+    {
+      "house": "h14",
+      "version": 1,
+      "min_sell_price": 4.2,
+      "max_buy_price": 5.5,
+      "daily_budget": 50.0,
+      "max_promise_kwh": 1.0,
+      "approve_above": 10.0,
+      "counterparties": "same_transformer",
+      "paused": false
+    },
+    {
+      "house": "h16",
+      "version": 1,
+      "min_sell_price": 3.8,
+      "max_buy_price": 5.4,
+      "daily_budget": 50.0,
+      "max_promise_kwh": 1.0,
+      "approve_above": 25.0,
+      "counterparties": "same_transformer",
+      "paused": false
+    },
+    {
+      "house": "h18",
+      "version": 1,
+      "min_sell_price": 3.5,
+      "max_buy_price": 5.4,
+      "daily_budget": 60.0,
+      "max_promise_kwh": 1.0,
+      "approve_above": 25.0,
+      "counterparties": "same_transformer",
+      "paused": false
+    }
+  ]
+}

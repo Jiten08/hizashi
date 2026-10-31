@@ -1,0 +1,5 @@
+hub: uvicorn hizashi_hub.app:app --host 0.0.0.0 --port 8000
+h12: python -m hizashi_agent --house h12 --port 9012
+h14: python -m hizashi_agent --house h14 --port 9014
+h16: python -m hizashi_agent --house h16 --port 9016
+h18: python -m hizashi_agent --house h18 --port 9018
