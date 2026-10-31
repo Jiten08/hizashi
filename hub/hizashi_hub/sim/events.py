@@ -1,10 +1,14 @@
 """Console events with start/end in sim time: cloud, outage, ac, guests, away.
 
-house=None means street-wide (an outage is always street-wide).
+house=None means street-wide (an outage is always street-wide). Owners' own away / guests
+schedules (from the phone) sit beside them in `schedules` and survive a reset.
 """
 from datetime import datetime, timedelta
 
 from pydantic import BaseModel
+
+from hizashi_shared import schedule
+from hizashi_shared.models import Schedule
 
 CLOUD_FACTOR = 0.3
 DEFAULT_MINUTES = {"cloud": 45, "outage": 30, "ac": 120, "guests": 180, "away": 240}
@@ -20,6 +24,7 @@ class SimEvent(BaseModel):
 class SimEvents:
     def __init__(self) -> None:
         self.events: list[SimEvent] = []
+        self.schedules: list[Schedule] = []
 
     def add(self, type_: str, house: str | None, start: datetime, minutes: int | None = None) -> SimEvent:
         minutes = minutes or DEFAULT_MINUTES.get(type_, 30)
@@ -40,6 +45,10 @@ class SimEvents:
     def cloud_factor(self, house: str, minute: datetime) -> float:
         """0.3 under a console cloud, else 1.0."""
         return CLOUD_FACTOR if self.active(minute, "cloud", house) else 1.0
+
+    def use_factor(self, house: str, minute: datetime) -> float:
+        """The owner's away / guests multiplier for this minute (1.0 when none is on)."""
+        return schedule.factor_at([s for s in self.schedules if s.house == house], minute)
 
     def outage(self, minute: datetime) -> bool:
         return bool(self.active(minute, "outage"))

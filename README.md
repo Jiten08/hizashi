@@ -27,6 +27,12 @@ ngrok http 8000                         # only if phones are on another network 
   `…/app/?house=h14` in the browser. Add it to the Home Screen for a full-screen app. Any number of phones.
 - Same Wi-Fi as the laptop? No ngrok needed (allow Python through Windows Firewall on private networks).
   Public Wi-Fi that isolates devices? Use ngrok; the first visit shows ngrok's notice once, tap **Visit Site**.
+- **Notifications** (Rules → Notifications, or the card on Approvals): the phone is pinged when its agent
+  needs an OK, even locked, with Approve / Decline on Android. Browsers allow this only over https, so open
+  the app through the ngrok link; on iPhone add it to the Home Screen first. The hub needs internet to reach
+  the push services. Keys are made on first use in `keys/vapid.pem`.
+- **Away / Guests** (Today → At home): the owner plans time away or guests for today or tomorrow, and the agent
+  re-plans. Tomorrow's plans take effect when the console's **Start the next day** moves the sim on a date.
 - Developing the phone app: `cd mobile && npm run dev` (http://localhost:5174/app/, proxies to the hub).
 
 Copy `.env.example` to `.env` to change defaults (sim day, speed, tariff, tokens, API keys). No API keys are needed to run.

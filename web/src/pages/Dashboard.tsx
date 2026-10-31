@@ -37,6 +37,13 @@ export default function Dashboard() {
     for (const b of fresh) toast(`House ${b.house.slice(1)}: blocked by its wallet`, String(b.reason ?? ""), "bad");
   }, [hub.blocked.length]);
 
+  const seenFlags = useRef(-1);
+  useEffect(() => {
+    const fresh = seenFlags.current < 0 ? [] : hub.flags.slice(seenFlags.current);
+    seenFlags.current = hub.flags.length;
+    for (const f of fresh) toast(`Guard · ${f.title ?? "flag"}`, String(f.text ?? ""), "bad");
+  }, [hub.flags.length]);
+
   return (
     <div className="mx-auto max-w-[1440px] px-8 pb-10 pt-6">
       <header className="flex items-center gap-4">

@@ -4,16 +4,23 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from hizashi_shared import blocks
 from hizashi_shared import events as ev
 from hizashi_shared.models import HOUSES, Event
 
-from .. import bus, clock
+from .. import attacks, bus, clock, schedules
+from .. import state as hub_state
+from ..sim import weather
 
 router = APIRouter(prefix="/console", tags=["console"])
 
 
 class SpeedBody(BaseModel):
     speed: int
+
+
+class ResetBody(BaseModel):
+    next_day: bool = False      # move to the day after (owners' schedules for it take effect)
 
 
 class ConsoleEventBody(BaseModel):
@@ -32,15 +39,24 @@ def set_speed(body: SpeedBody) -> dict:
 
 
 @router.post("/reset")
-async def reset() -> dict:
+async def reset(request: Request, body: ResetBody | None = None) -> dict:
+    """Start the day over at 05:00, or with next_day start the following day (its own weather)."""
     c = clock.get()
-    await c.reset()
-    return {"sim_time": c.now.isoformat(), "speed": c.speed}
+    day = None
+    if body and body.next_day:
+        day = blocks.next_day(c.day)
+        frame, source = await weather.load_weather(day)
+        request.app.state.sim.set_weather(frame)
+        hub_state.get().weather_source = source
+    await c.reset(day)
+    schedules.publish_all(request.app.state.db, c.now)
+    return {"sim_time": c.now.isoformat(), "speed": c.speed, "day": c.day}
 
 
 SIM_TYPES = ("cloud", "outage", "ac", "guests", "away")
 NEEDS_HOUSE = ("ac", "guests", "away")
-PHASE3 = ("rogue_seller", "collusion")
+COLLUDERS = ("h16", "h18")
+COLLUSION_PRICE = 5.60
 
 
 @router.post("/events")
@@ -63,4 +79,11 @@ async def post_event(request: Request, body: ConsoleEventBody) -> dict:
         house = body.house or "h14"
         bus.publish(Event(type=ev.CONSOLE_COMMAND, sim_time=now, house=house, data={"cmd": "bad_bid", "price": 40}))
         return {"status": "ok", "sent_to": house}
-    raise HTTPException(501, f"{body.type} is a Phase 3 attack demo (N3)")
+    if body.type == "rogue_seller":
+        c = clock.get()
+        return await attacks.fake_seller(hub_state.get().houses, c.block_states, now, target=body.house or "h14")
+    # collusion: two sellers agree to hold one ask; the guard catches them after a few blocks
+    for house in COLLUDERS:
+        bus.publish(Event(type=ev.CONSOLE_COMMAND, sim_time=now, house=house,
+                          data={"cmd": "collude", "price": COLLUSION_PRICE, "blocks": 6}))
+    return {"status": "ok", "sent_to": list(COLLUDERS), "price": COLLUSION_PRICE}

@@ -21,6 +21,7 @@ class HubState:
         self.mandates = mandates
         self.speed = speed
         self.weather_source: str | None = None
+        self.schedules: dict[str, list[dict]] = {}   # house -> away / guests plans (kept across days)
         self.reset()
 
     def reset(self) -> None:
@@ -87,6 +88,8 @@ class HubState:
             self.auctions[d.get("block", "")] = d
         elif e.type == ev.HOUSE_UPDATED and e.house:
             self.houses[e.house] = HouseInfo.model_validate(d["house"])
+        elif e.type == ev.SCHEDULE_UPDATED and e.house:
+            self.schedules[e.house] = d.get("schedules", [])
         elif e.type == ev.SAVINGS_UPDATED and e.house:
             self.savings[e.house] = d
         elif e.type in (ev.APPROVAL_REQUESTED, ev.APPROVAL_RESOLVED):
@@ -123,6 +126,7 @@ class HubState:
             "sim_events": self.sim_events,
             "blocked": self.blocked,
             "auctions": self.auctions,
+            "schedules": self.schedules,
             "recent_events": self.recent,
         }
 

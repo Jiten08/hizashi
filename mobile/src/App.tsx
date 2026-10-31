@@ -1,7 +1,9 @@
 // The owner's phone app for one house. Which house comes from the QR link (?house=h14) and is
-// remembered on the phone. First visit runs onboarding; then four tabs.
-import { useState } from "react";
+// remembered on the phone. First visit runs onboarding; then four tabs. A notification tap opens
+// a tab through ?tab= (or a message from the service worker when the app is already open).
+import { useEffect, useState } from "react";
 import { Button, Icon, type IconName, Spinner } from "./components/ui";
+import { syncPush } from "./lib/push";
 import { saveHouse, savedHouse, useHubConnection, useHubStore } from "./lib/store";
 import type { House } from "./lib/types";
 import Approvals from "./pages/Approvals";
@@ -19,12 +21,27 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
   { id: "history", label: "History", icon: "clock" },
 ];
 
+const tabFrom = (url: string): Tab | null => {
+  const t = new URL(url, location.origin).searchParams.get("tab");
+  return TABS.some((x) => x.id === t) ? (t as Tab) : null;
+};
+
 export default function App() {
   const [house, setHouse] = useState<House | null>(savedHouse);
-  const [tab, setTab] = useState<Tab>("today");
+  const [tab, setTab] = useState<Tab>(() => tabFrom(location.href) ?? "today");
   const [editingSetup, setEditingSetup] = useState(false);
   useHubConnection(house);
   const hub = useHubStore();
+
+  useEffect(() => { if (house) syncPush(house); }, [house]);
+  useEffect(() => {
+    const onMessage = (m: MessageEvent) => {
+      const t = m.data?.type === "open" ? tabFrom(m.data.url) : null;
+      if (t) { setEditingSetup(false); setTab(t); window.scrollTo(0, 0); }
+    };
+    navigator.serviceWorker?.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker?.removeEventListener("message", onMessage);
+  }, []);
 
   const choose = (h: House | null) => {
     saveHouse(h);

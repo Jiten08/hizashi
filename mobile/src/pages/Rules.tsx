@@ -1,6 +1,7 @@
 // Rules: the wallet's limits (Save = a new mandate version in the ledger), the home's setup.
 import { useEffect, useState } from "react";
 import { MandateSteppers } from "../components/MandateSteppers";
+import { NotificationsSection } from "../components/Notifications";
 import { Button, Row, Screen, Section, Segmented, Toggle } from "../components/ui";
 import { api } from "../lib/api";
 import { useHubStore } from "../lib/store";
@@ -45,6 +46,8 @@ export default function Rules({ house, onEditSetup, onSwitchHouse }: { house: Ho
           <Button onClick={save} busy={state === "saving"}>Save</Button>
         </div>
       )}
+
+      <NotificationsSection house={house} />
 
       <Section header="Your home">
         <Row icon={info.roof ? "sun" : "home"} iconBg={info.roof ? "var(--color-orange)" : "var(--color-blue)"}

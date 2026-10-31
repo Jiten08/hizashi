@@ -12,6 +12,7 @@ from hizashi_shared import events as ev
 from hizashi_shared.models import Contract, Event, HouseInfo
 
 from .. import bus
+from ..guard import watch
 from ..settlement import ledger
 from ..wallet import keystore
 
@@ -43,7 +44,6 @@ def verify(contract: Contract, street: dict[str, HouseInfo], block_state_fn: Blo
     if contract.open_access != open_access:
         # Both parties sign open_access, so the market can't flip it after the fact.
         raise BookingError(f"open_access must be {open_access} for these two houses; both wallets sign it.")
-    # TODO(N2, Jiten): guard.rules.check_contract (wash trade, replay, collusion)
     return contract
 
 
@@ -53,6 +53,12 @@ def book(conn: sqlite3.Connection, contract: Contract, street: dict[str, HouseIn
     if conn.execute("SELECT 1 FROM contracts WHERE contract_id = ?", (contract.contract_id,)).fetchone():
         raise BookingError("This contract is already booked.")
     contract = verify(contract, street, block_state_fn, now)
+    guard = watch.get()
+    if guard:
+        try:
+            guard.check_contract(conn, contract, now)
+        except watch.GuardRefusal as e:
+            raise BookingError(str(e)) from e
     return record(conn, contract, now, market_key)
 
 

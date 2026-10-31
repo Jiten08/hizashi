@@ -1,6 +1,6 @@
 // REST calls to the hub. The app is served by the hub at /app/, so every path is same-origin.
 // The phone only sends taps; the hub computes every price and saving.
-import type { Approval, ApprovalRow, House, LedgerEntry, Mandate, SetupBody, SetupResult, Snapshot } from "./types";
+import type { Approval, ApprovalRow, House, LedgerEntry, Mandate, Schedule, SetupBody, SetupResult, Snapshot } from "./types";
 
 // ngrok's free tier puts a warning page in front of browsers unless this header is sent.
 const HEADERS = { "ngrok-skip-browser-warning": "1" };
@@ -27,6 +27,13 @@ export const api = {
   verify: () => req<{ ok: boolean; broken_at?: number; entries?: number }>("GET", "/api/ledger/verify"),
   putMandate: (house: House, m: Mandate) => req<Mandate>("PUT", `/api/wallet/${house}/mandate`, m),
   setup: (house: House, body: SetupBody) => req<SetupResult>("POST", `/api/houses/${house}/setup`, body),
+  addSchedule: (house: House, body: { kind: Schedule["kind"]; day: string; start: string; end: string }) =>
+    req<Schedule>("POST", `/api/schedules/${house}`, body),
+  removeSchedule: (house: House, id: string) => req<{ status: string }>("DELETE", `/api/schedules/${house}/${id}`),
+  pushKey: () => req<{ key: string }>("GET", "/api/push/key"),
+  pushSubscribe: (house: House, sub: PushSubscriptionJSON) => req<{ status: string }>("POST", `/api/push/${house}`, sub),
+  pushUnsubscribe: (house: House, endpoint: string) => req<{ status: string }>("DELETE", `/api/push/${house}`, { endpoint }),
+  pushTest: (house: House) => req<{ sent: number }>("POST", `/api/push/${house}/test`),
 };
 
 export function wsUrl(house: House): string {

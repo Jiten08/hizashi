@@ -14,6 +14,7 @@ from hizashi_shared import events as ev
 from hizashi_shared.models import Contract, Event, Offer, PlanWindow
 
 from .. import bus
+from ..guard import watch
 from . import checks, keystore
 from . import mandate as mandates
 
@@ -84,7 +85,8 @@ def _dump(model) -> dict:
 # Refusals the owner should see as a red card: their own limits stopped the agent.
 # Check 3 (block timing) and 0 (duplicates, mismatched terms) are protocol noise; check 8
 # (plan waiting / declined) is already on the phone as the approval card.
-OWNER_CHECKS = {2, 4, 5, 6, 7}
+OWNER_CHECKS = {2, 4, 5, 6, 7, 9}
+GUARD_CHECK = 9                 # the guard refused it (replay, price-fixing)
 
 
 def _blocked(house: str, reason: str, payload: dict, now: datetime, check: int | None = None) -> dict:
@@ -114,8 +116,18 @@ def sign_offer_request(conn: sqlite3.Connection, house: str, token: str | None, 
             store_offer(conn, offer, "refused", result.reason, now)
         return _blocked(house, result.reason, {"offer": _dump(offer)}, now, result.check)
 
+    guard = watch.get()
+    if guard:
+        try:
+            guard.check_ask(conn, offer, now)
+        except watch.GuardRefusal as e:
+            store_offer(conn, offer, "refused", str(e), now)
+            return _blocked(house, str(e), {"offer": _dump(offer)}, now, GUARD_CHECK)
+
     signed = sign_offer(house, offer)
     store_offer(conn, signed, "signed", None, now)
+    if guard:
+        guard.signed(signed)
     data = {"offer": _dump(signed)}
     bus.publish(Event(type=ev.NEGO_OFFER, sim_time=now, house=house, data=data))
     if signed.to:

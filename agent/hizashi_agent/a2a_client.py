@@ -44,8 +44,10 @@ async def negotiate_sale(
     seller_limit: float | None = None,
     remaining_kwh: float | None = None,
     http: httpx.AsyncClient | None = None,
+    fixed_price: float | None = None,
 ) -> Contract | None:
-    """Run an A2A negotiation as seller with a neighbouring buyer agent."""
+    """Run an A2A negotiation as seller with a neighbouring buyer agent. `fixed_price` (the
+    console's collusion demo) asks that price every round instead of conceding."""
     if first_ask is not None:
         block_ref = first_ask.block
         kwh = first_ask.kwh if remaining_kwh is None else remaining_kwh
@@ -74,7 +76,7 @@ async def negotiate_sale(
         expires_at = blocks.gate_close(block_ref)
 
         for r in range(start_round, config.MAX_ROUNDS):
-            ask_p = negotiator.ask_price(r, s_limit)
+            ask_p = fixed_price if fixed_price is not None else negotiator.ask_price(r, s_limit)
             if r == start_round and first_ask.signature:
                 signed_offer = first_ask
             else:

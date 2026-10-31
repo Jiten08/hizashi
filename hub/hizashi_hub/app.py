@@ -9,7 +9,9 @@ web/dist is served at / with SPA fallback (unknown non-/api paths return index.h
 Startup also loads (or fetches) the day's weather and builds the simulated street
 (sim/world.py): meters, console events, the market lifecycle (auction + settlement).
 The previous run's day rows are cleared, since the clock always starts at 05:00.
-Not yet wired: guard rules (N2).
+Owners' away / guests schedules are loaded into the sim, and a Web Push task pings
+owners' phones when an approval is requested. The guard (N2) watches meter readings and
+is consulted by the wallet and booking.
 """
 import asyncio
 import logging
@@ -22,7 +24,9 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Resp
 from hizashi_shared import config, street
 from hizashi_shared.models import Mandate
 
-from . import clock, db, state, ws
+from . import clock, db, schedules, state, ws
+from .guard import watch
+from .notify import webpush
 from .sim import weather
 from .sim.world import Sim, clear_day
 from .api import router as api_router
@@ -57,6 +61,11 @@ async def lifespan(app: FastAPI):
     sim_clock = clock.init(config.SIM_DAY, config.SIM_SPEED)
     app.state.sim = Sim(conn, hub_state.houses, hub_state.mandates, frame)
     app.state.sim.wire(sim_clock)
+    schedules.sync(conn, app.state.sim.events)
+    hub_state.schedules = {h: [s.model_dump(mode="json") for s in schedules.listing(conn, h, config.SIM_DAY)]
+                           for h in houses}
+    tasks.append(asyncio.create_task(webpush.run(conn), name="webpush"))
+    tasks.append(asyncio.create_task(watch.init(hub_state.houses).run(conn), name="guard"))
     sim_clock.start()
     log.info("hub up: day %s at %sx, %d houses", config.SIM_DAY, config.SIM_SPEED, len(houses))
     try:
@@ -81,7 +90,7 @@ def _serve(dist, path: str, missing: str):
     if path:
         f = (dist / path).resolve()
         if f.is_file() and f.is_relative_to(dist):
-            headers = {"Cache-Control": "no-cache"} if f.name in ("sw.js", "index.html", "manifest.webmanifest") else None
+            headers = {"Cache-Control": "no-cache"} if f.name in ("sw.js", "push-sw.js", "index.html", "manifest.webmanifest") else None
             return FileResponse(f, media_type=MEDIA_TYPES.get(f.suffix), headers=headers)
     index = dist / "index.html"
     if index.is_file():

@@ -1,9 +1,11 @@
 """Main loop reacting to block states (section 7.6).
 
-PLANNED: forecast the day, post plan windows. OPEN: sellers start negotiations, buyers
+PLANNED: forecast the day (with the owner's away / guests schedule), post plan windows. OPEN: sellers start negotiations, buyers
 answer. GATE_CLOSED: post leftover kWh as a signed market order at the limit price.
 DELIVERING: read own meter. SETTLED: read results; after a shortfall shrink promises 10%.
 Console command bad_bid (h14): bid at ₹40 for the next OPEN block (the wallet refuses it).
+Console command collude (h16 + h18): hold one agreed ask for the next few blocks; the guard
+catches the pattern (KERC 5(a)(ii)) and the wallet stops signing it.
 """
 from __future__ import annotations
 
@@ -14,8 +16,8 @@ import uuid
 
 import httpx
 
-from hizashi_shared import blocks, config, events as ev, profiles, solar, street
-from hizashi_shared.models import BlockRef, Contract, Event, Forecast, HouseInfo, Mandate, Offer
+from hizashi_shared import blocks, config, events as ev, profiles, schedule, solar, street
+from hizashi_shared.models import BlockRef, Contract, Event, Forecast, HouseInfo, Mandate, Offer, Schedule
 from . import forecaster, negotiator, planner
 from .a2a_client import negotiate_sale
 from .hub_client import HubClient
@@ -40,6 +42,8 @@ class Runtime:
         self.promise_factor = 1.0          # shrinks 10% after each shortfall
         self.forecasts: dict[int, Forecast] = {}
         self.actual: dict[int, dict[str, float]] = {}   # block -> metered solar/use kWh so far
+        self.schedules: list[Schedule] = []             # the owner's away / guests plans
+        self.collude: dict | None = None                # {"price", "blocks"} while the collusion demo runs
 
         # Load initial street & mandates synchronously from local data
         try:
@@ -59,12 +63,15 @@ class Runtime:
 
         try:
             state = await self.hub.get_state()
-            if "mandates" in state:
-                self.mandates = {m["house"]: Mandate.model_validate(m) for m in state["mandates"]}
-            if "block_states" in state:
-                self.block_states = state["block_states"]
-        except Exception:
-            pass
+            if state.get("sim_time"):         # the console may have moved on to a later day
+                self.current_sim_time = datetime.fromisoformat(state["sim_time"])
+                self.day = self.current_sim_time.date().isoformat()
+            # GET /api/state: mandates by house, block states under "blocks" (block key -> state)
+            for h, m in (state.get("mandates") or {}).items():
+                self.mandates[h] = Mandate.model_validate(m)
+            self.block_states = dict(state.get("blocks") or {})
+        except Exception as e:
+            log.warning("%s couldn't read the hub's state (%s); starting from local data", self.house, e)
 
         # If day is already running and tradable blocks are active, forecast and plan
         if not self.planned:
@@ -78,7 +85,15 @@ class Runtime:
                 if rem > config.MIN_TRADE_KWH:
                     asyncio.create_task(self.negotiate_sell(b_ref))
 
-    def fallback_forecast(self, house_info: HouseInfo, day: str) -> list[Forecast]:
+    async def load_schedules(self) -> list[float]:
+        """Per-block use factors for today from the owner's schedule (1.0 if the hub can't say)."""
+        try:
+            self.schedules = [Schedule.model_validate(s) for s in await self.hub.get_schedules()]
+        except Exception as e:
+            log.warning("%s couldn't fetch schedules (%s)", self.house, e)
+        return schedule.use_factors(self.schedules, self.day)
+
+    def fallback_forecast(self, house_info: HouseInfo, day: str, use_factors: list[float] | None = None) -> list[Forecast]:
         """Fallback forecast: profile mean +/- 1.28 sd; solar from the clear-sky roof model, p10/p90 at -/+15%."""
         log.info("%s using fallback forecast", self.house)
         try:
@@ -99,8 +114,9 @@ class Runtime:
             s_p10 = round(s_p50 * 0.85, 4)
             s_p90 = round(s_p50 * 1.15, 4)
 
-            m_i = means[i]
-            s_i = stds[i]
+            f = use_factors[i] if use_factors else 1.0
+            m_i = means[i] * f
+            s_i = stds[i] * f
             use_p50 = round(m_i, 4)
             use_p10 = round(max(0.0, m_i - 1.28 * s_i), 4)
             use_p90 = round(m_i + 1.28 * s_i, 4)
@@ -127,14 +143,15 @@ class Runtime:
         if not me_info or not mandate:
             return
 
+        factors = await self.load_schedules()
         forecasts: list[Forecast]
         try:
-            weather_data = await self.hub.get_weather()
+            weather_data = await self.hub.get_weather(self.day)
             df = solar.weather_frame(weather_data)        # needs the 15-min DatetimeIndex
-            forecasts = forecaster.forecast_day(me_info, df, self.day)
+            forecasts = forecaster.forecast_day(me_info, df, self.day, use_factors=factors)
         except Exception as e:
             log.warning("%s forecaster failed (%s)", self.house, e)
-            forecasts = self.fallback_forecast(me_info, self.day)
+            forecasts = self.fallback_forecast(me_info, self.day, factors)
 
         self.forecasts = {f.block.index: f for f in forecasts}
         intents = planner.plan_day(forecasts, mandate)
@@ -175,6 +192,12 @@ class Runtime:
             return
 
         s_limit = negotiator.seller_limit(my_mandate.min_sell_price, me_info.buyback_rate)
+        fixed = None
+        if self.collude and self.collude["blocks"] > 0:
+            fixed = s_limit = float(self.collude["price"])
+            self.collude["blocks"] -= 1
+            log.info("%s colluding: holding ₹%.2f for %s (%d more blocks)", self.house, fixed, block_ref.key,
+                     self.collude["blocks"])
         same_tf = my_mandate.counterparties == "same_transformer"
         candidates = street.neighbours(self.houses, self.house, same_transformer=same_tf)
 
@@ -191,7 +214,7 @@ class Runtime:
                         log.info("%s reached T - 70m for %s, stopping haggle", self.house, block_ref.key)
                         break
 
-                ask_0 = negotiator.ask_price(0, s_limit)
+                ask_0 = fixed if fixed is not None else negotiator.ask_price(0, s_limit)
                 expires_at = blocks.gate_close(block_ref)
                 nego_id = str(uuid.uuid4())
 
@@ -223,6 +246,7 @@ class Runtime:
                     seller_limit=s_limit,
                     remaining_kwh=current_rem,
                     http=http,
+                    fixed_price=fixed,
                 )
                 if contract:
                     self.remaining_sell[block_ref.index] = max(
@@ -343,16 +367,22 @@ class Runtime:
         self.planned = False
         self.promise_factor = 1.0
         self._negotiating_blocks.clear()
+        self.collude = None
 
     async def on_event(self, event: Event) -> None:
         """Handle incoming hub events from the WebSocket subscription."""
         if event.type == ev.CLOCK_TICK:
             self.current_sim_time = event.sim_time
             if event.data.get("reset"):
+                self.day = event.data.get("day") or event.sim_time.date().isoformat()
                 self.reset_day()
 
         elif event.type == ev.CONSOLE_COMMAND and event.data.get("cmd") == "bad_bid":
             await self.bad_bid(float(event.data.get("price", 40)))
+
+        elif event.type == ev.CONSOLE_COMMAND and event.data.get("cmd") == "collude":
+            self.collude = {"price": float(event.data.get("price", 5.6)), "blocks": int(event.data.get("blocks", 6))}
+            log.info("%s console: collude at ₹%.2f for %d blocks", self.house, self.collude["price"], self.collude["blocks"])
 
         elif event.type == ev.METER_READING and event.house == self.house:
             self.record_reading(event.data)
@@ -362,6 +392,11 @@ class Runtime:
 
         elif event.type == ev.MANDATE_UPDATED and event.house:
             self.mandates[event.house] = Mandate.model_validate(event.data["mandate"])
+
+        elif event.type == ev.SCHEDULE_UPDATED and event.house == self.house:
+            # Away / guests changed: re-forecast; blocks already past PLANNED keep their deals.
+            if self.planned:
+                await self.forecast_and_plan()
 
         elif event.type == ev.HOUSE_UPDATED and event.house:
             self.houses[event.house] = HouseInfo.model_validate(event.data["house"])

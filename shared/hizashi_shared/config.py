@@ -79,6 +79,9 @@ AGENT_PORTS = {"h12": 9012, "h14": 9014, "h16": 9016, "h18": 9018}
 
 AGENT_TOKENS = {h: _s(f"AGENT_TOKEN_{h.upper()}", f"dev-{h}") for h in AGENT_PORTS}
 
+# Web Push (phone notifications). The VAPID key pair is made on first use in keys/vapid.pem.
+VAPID_SUBJECT = _s("VAPID_SUBJECT", "mailto:team-enthos@example.org")
+
 # Phase 3
 GEMINI_API_KEY = _s("GEMINI_API_KEY", "")
 GROQ_API_KEY = _s("GROQ_API_KEY", "")

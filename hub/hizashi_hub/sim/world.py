@@ -63,6 +63,12 @@ class Sim:
             self._outage = active
             bus.publish(Event(type=ev.GRID_OUTAGE, sim_time=now, data={"active": active}))
 
+    def set_weather(self, weather: pd.DataFrame) -> None:
+        """A new day's forecast weather (console "next day"): roofs recompute their output."""
+        self.weather = weather
+        self.pv.weather = weather
+        self.pv._base.clear()
+
     def reset(self) -> None:
         clear_day(self.conn)
         self.events.clear()

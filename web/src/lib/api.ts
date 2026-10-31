@@ -19,6 +19,7 @@ export const api = {
   state: () => req<Snapshot>("GET", "/api/state"),
   setSpeed: (speed: 1 | 60 | 300) => req<{ speed: number }>("POST", "/api/console/speed", { speed }),
   reset: () => req<{ sim_time: string }>("POST", "/api/console/reset"),
+  nextDay: () => req<{ sim_time: string; day: string }>("POST", "/api/console/reset", { next_day: true }),
   consoleEvent: (type: string, house?: string, minutes?: number) =>
     req("POST", "/api/console/events", { type, house, minutes }),
   decide: (approvalId: string, decision: "approve" | "decline") =>

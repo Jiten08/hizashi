@@ -86,9 +86,16 @@ class HubClient:
             r.raise_for_status()
             return r.json()
 
-    async def get_weather(self) -> dict:
+    async def get_weather(self, day: str | None = None) -> dict:
         async with httpx.AsyncClient(timeout=5) as http:
-            r = await http.get(f"{self.hub_url}/api/weather")
+            r = await http.get(f"{self.hub_url}/api/weather", params={"day": day} if day else None)
+            r.raise_for_status()
+            return r.json()
+
+    async def get_schedules(self) -> list[dict]:
+        """The owner's away / guests plans that haven't ended yet."""
+        async with httpx.AsyncClient(timeout=5) as http:
+            r = await http.get(f"{self.hub_url}/api/schedules/{self.house}")
             r.raise_for_status()
             return r.json()
 

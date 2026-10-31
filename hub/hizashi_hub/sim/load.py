@@ -1,5 +1,5 @@
 """Actual household use per minute: profile mean (interpolated to minutes) + seeded noise
-+ modifiers (AC on +1.0 kW, Guests x1.4, Away x0.4).
++ modifiers (AC on +1.0 kW, Guests x1.4, Away x0.4), from console events or the owner's schedule.
 
 The noise is one draw per block from the profile's std, so a block's total varies the
 way the forecaster's p10/p90 expect, plus a small per-minute wobble.
@@ -8,15 +8,15 @@ from datetime import datetime
 
 import numpy as np
 
-from hizashi_shared import config, profiles
+from hizashi_shared import config, profiles, schedule
 from hizashi_shared.models import HouseInfo
 
 from .events import SimEvents
 from .pv import MINUTES, _seed, minute_of_day
 
 AC_KW = 1.0
-GUESTS = 1.4
-AWAY = 0.4
+GUESTS = schedule.GUESTS
+AWAY = schedule.AWAY
 MIN_KW = 0.02
 
 
@@ -45,6 +45,7 @@ class LoadSim:
             kw *= AWAY
         if self.events.active(minute, "guests", house):
             kw *= GUESTS
+        kw *= self.events.use_factor(house, minute)
         if self.events.active(minute, "ac", house):
             kw += AC_KW
         return kw

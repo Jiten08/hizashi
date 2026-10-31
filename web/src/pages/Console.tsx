@@ -1,5 +1,5 @@
-// /console: every demo control — speed, reset, street and per-house events, the ₹40 attack,
-// ledger verify — plus the raw event log.
+// /console: every demo control — speed, reset, street and per-house events, the attacks
+// (₹40 bid, forged seller, price-fixing), ledger verify — plus the raw event log.
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { EventLog } from "../components/EventLog";
@@ -39,7 +39,7 @@ export default function Console() {
         <Link to="/"><Button icon="arrow">Back to the street</Button></Link>
       </header>
 
-      <div className="mt-6 grid grid-cols-3 gap-5">
+      <div className="mt-6 grid grid-cols-4 gap-5">
         <Card title="Clock">
           <div className="flex items-center justify-between">
             <span className="text-sm text-ink-2">Speed (one tick = one sim minute)</span>
@@ -47,13 +47,21 @@ export default function Console() {
               options={[1, 60, 300].map((s) => ({ value: s, label: `${s}×` }))} />
           </div>
           <Button icon="reset" kind="danger" className="mt-4 w-full" onClick={() => run("Day reset", api.reset)}>Reset the day (same seed)</Button>
+          <Button icon="arrow" className="mt-2 w-full" onClick={() => run("Next day", api.nextDay)}>Start the next day (owners' away / guests plans apply)</Button>
         </Card>
         <Card title="Street events">
           <div className="grid gap-2">
             <Button icon="cloud" onClick={() => ev("cloud", undefined, 45)}>Cloud over the whole street</Button>
             <Button icon="plug" onClick={() => ev("outage", undefined, 30)}>Grid outage · 30 min</Button>
-            <Button icon="ban" kind="danger" onClick={() => ev("bad_bid", "h14")}>House 14 tries a ₹40 bid</Button>
           </div>
+        </Card>
+        <Card title="Attacks">
+          <div className="grid gap-2">
+            <Button icon="ban" kind="danger" onClick={() => ev("bad_bid", "h14")}>House 14 tries a ₹40 bid</Button>
+            <Button icon="ban" kind="danger" onClick={() => run("Forged ask sent to House 14", () => api.consoleEvent("rogue_seller", "h14"))}>Fake “House 16” offers House 14 ₹3.20</Button>
+            <Button icon="ban" kind="danger" onClick={() => run("House 16 + 18 start fixing ₹5.60", () => api.consoleEvent("collusion"))}>House 16 and 18 fix their price at ₹5.60</Button>
+          </div>
+          <p className="mt-3 text-[12px] text-ink-2">Price-fixing needs both roofs selling (mid-morning to early afternoon); the guard flags it after 4 blocks.</p>
         </Card>
         <Card title="Ledger">
           <p className="text-sm text-ink-2">Re-hash every entry from the first; an edited row breaks the chain.</p>

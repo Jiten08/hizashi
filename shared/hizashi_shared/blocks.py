@@ -24,6 +24,10 @@ def day_end(day: str) -> datetime:
     return datetime.combine(_day(day), DAY_END, tzinfo=config.TZ)
 
 
+def next_day(day: str) -> str:
+    return (_day(day) + timedelta(days=1)).isoformat()
+
+
 def block_start(ref: BlockRef) -> datetime:
     midnight = datetime.combine(_day(ref.day), datetime.min.time(), tzinfo=config.TZ)
     return midnight + ref.index * _BLOCK
