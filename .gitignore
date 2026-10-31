@@ -11,3 +11,4 @@ hub/*.db-shm
 web/node_modules/
 web/dist/
 data/weather/*.json
+cloudflared.exe
