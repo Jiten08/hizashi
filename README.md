@@ -7,7 +7,7 @@ Every home with rooftop solar gets an agent that forecasts, promises safely and 
 Needs Python ≥ 3.12, Node ≥ 20, and on the phone the free **Expo Go** app.
 
 ```bash
-python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scriptsctivate
+python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 python scripts/gen_keys.py && python scripts/seed.py
 pytest
