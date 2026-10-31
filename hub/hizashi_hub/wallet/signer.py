@@ -81,9 +81,10 @@ def _dump(model) -> dict:
     return json.loads(model.model_dump_json())
 
 
-# Refusals the owner should see as a red card: their own rules stopped the agent.
-# Check 3 (block timing) and 0 (duplicates, mismatched terms) are protocol noise.
-OWNER_CHECKS = {2, 4, 5, 6, 7, 8}
+# Refusals the owner should see as a red card: their own limits stopped the agent.
+# Check 3 (block timing) and 0 (duplicates, mismatched terms) are protocol noise; check 8
+# (plan waiting / declined) is already on the phone as the approval card.
+OWNER_CHECKS = {2, 4, 5, 6, 7}
 
 
 def _blocked(house: str, reason: str, payload: dict, now: datetime, check: int | None = None) -> dict:

@@ -99,6 +99,18 @@ def _set_status(conn: sqlite3.Connection, approval_id: str, status: str, channel
                  (status, channel, now.isoformat(), approval_id))
 
 
+def _expire(conn: sqlite3.Connection, approval_id: str, now: datetime) -> Approval | None:
+    """Mark a pending approval expired and tell the phone (approval.resolved)."""
+    r = conn.execute("SELECT * FROM approvals WHERE approval_id = ?", (approval_id,)).fetchone()
+    if r is None or r["status"] != "pending":
+        return None
+    _set_status(conn, approval_id, "expired", None, now)
+    a = _row_to_approval(r).model_copy(update={"status": "expired"})
+    bus.publish(Event(type=ev.APPROVAL_RESOLVED, sim_time=now, house=a.house,
+                      data={"approval": _dump(a, {"channel": None, "decided_at": now.isoformat()})}))
+    return a
+
+
 # --- plans --------------------------------------------------------------------------
 
 def store_plans(conn: sqlite3.Connection, house: str, windows: list[PlanWindow], mandate: Mandate,
@@ -109,8 +121,8 @@ def store_plans(conn: sqlite3.Connection, house: str, windows: list[PlanWindow],
     old = [w for d in days for w in plans_for(conn, house, d)]
     decided = {(w.side, w.first_index, w.last_index): w.status for w in old if w.status in ("approved", "declined")}
     for w in old:
-        for r in conn.execute("SELECT approval_id FROM approvals WHERE ref_id = ? AND status = 'pending'", (w.plan_id,)):
-            _set_status(conn, r["approval_id"], "expired", None, now)
+        for r in conn.execute("SELECT approval_id FROM approvals WHERE ref_id = ? AND status = 'pending'", (w.plan_id,)).fetchall():
+            _expire(conn, r["approval_id"], now)
         conn.execute("DELETE FROM plans WHERE plan_id = ?", (w.plan_id,))
 
     saved = []
@@ -182,18 +194,22 @@ def resolve(conn: sqlite3.Connection, approval_id: str, decision: str, channel: 
 
 
 def expire_through(conn: sqlite3.Connection, ref: BlockRef, now: datetime) -> list[Approval]:
-    """At a block's gate closure: pending plan approvals whose window ends by this block can't be used any more."""
+    """At a block's gate closure: pending plan approvals whose window ends by this block can't be
+    used any more. The approval and its window become `expired`."""
     out = []
+    touched: set[str] = set()
     for r in conn.execute("SELECT * FROM approvals WHERE status = 'pending' AND kind = 'plan'").fetchall():
         p = conn.execute("SELECT json FROM plans WHERE plan_id = ?", (r["ref_id"],)).fetchone()
         if not p:
             continue
         w = PlanWindow.model_validate_json(p["json"])
         if w.day == ref.day and w.last_index <= ref.index:
-            _set_status(conn, r["approval_id"], "expired", None, now)
-            a = _row_to_approval(r).model_copy(update={"status": "expired"})
-            bus.publish(Event(type=ev.APPROVAL_RESOLVED, sim_time=now, house=a.house,
-                              data={"approval": _dump(a, {"channel": None, "decided_at": now.isoformat()})}))
-            out.append(a)
+            a = _expire(conn, r["approval_id"], now)
+            if a:
+                out.append(a)
+            _save_plan(conn, signer.sign_plan(w.house, w.model_copy(update={"status": "expired"})))
+            touched.add(w.house)
     conn.commit()
+    for house in touched:
+        publish_plans(conn, house, ref.day, now)
     return out

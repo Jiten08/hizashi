@@ -144,6 +144,8 @@ def check_approval(side: Side, kwh: float, price: float, block: BlockRef, mandat
             return _refuse(8, f"Waiting for your OK on the {window_label(w)} buy plan, so it was never sent.")
         if w.status == "declined":
             return _refuse(8, f"You declined the {window_label(w)} buy plan, so it was never sent.")
+        if w.status == "expired":
+            return _refuse(8, f"The {window_label(w)} buy plan wasn't approved in time, so it was never sent.")
         return OK
     if allow_pending and kwh * price > mandate.approve_above + 1e-9:
         return CheckResult("pending", f"Buying {kwh:.2f} kWh at ₹{price:.2f} is over your ₹{mandate.approve_above:.2f} "

@@ -107,9 +107,13 @@ def test_replanning_keeps_decisions_and_expires_dropped(conn):
     approvals.resolve(conn, a["approval_id"], "decline", "app", NOW)
     again = approvals.store_plans(conn, "h14", [window(40, 51), window(52, 63, kwh=2.6)], H14, NOW)
     assert [w.status for w in again] == ["declined", "pending"]
+    q = bus.subscribe()
     approvals.store_plans(conn, "h14", [window(40, 51)], H14, NOW)        # 13:00 window dropped
     statuses = sorted(x["status"] for x in approvals.listing(conn, "h14"))
     assert statuses == ["declined", "expired"]
+    told = [e.data["approval"]["status"] for e in (q.get_nowait() for _ in range(q.qsize())) if e.type == "approval.resolved"]
+    bus.unsubscribe(q)
+    assert told == ["expired"]                                            # the phone hears about it
 
 
 def test_expire_at_gate_closure(conn):
@@ -117,6 +121,8 @@ def test_expire_at_gate_closure(conn):
     assert approvals.expire_through(conn, BlockRef(day=DAY, index=50), NOW) == []
     [a] = approvals.expire_through(conn, BlockRef(day=DAY, index=51), NOW)
     assert a.status == "expired"
+    [w] = approvals.plans_for(conn, "h14", DAY)
+    assert w.status == "expired" and checks.check_approval("buy", 0.1, 4.6, BlockRef(day=DAY, index=48), H14, [w]).check == 8
 
 
 def test_budget_counts_booked_contracts(conn):

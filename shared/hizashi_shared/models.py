@@ -76,7 +76,7 @@ class PlanWindow(BaseModel):        # a run of consecutive blocks with the same 
     kwh: float
     expected_price: float
     expected_value: float           # kwh * expected_price
-    status: Literal["auto", "pending", "approved", "declined"] = "auto"
+    status: Literal["auto", "pending", "approved", "declined", "expired"] = "auto"
     signature: str | None = None
 
 
