@@ -50,7 +50,7 @@ export function ConnectSheet({ onClose }: { onClose: () => void }) {
 
         <ol className="mt-6 grid grid-cols-3 gap-4 text-[13px] text-ink-2">
           <li className="rounded-2xl bg-canvas p-4"><b className="block text-ink">1 · Get Expo Go</b>Free from the App Store or Play Store.</li>
-          <li className="rounded-2xl bg-canvas p-4"><b className="block text-ink">2 · Open the app</b>Scan the Expo code printed by <span className="font-mono">npx expo start --tunnel</span> in <span className="font-mono">mobile/</span>.</li>
+          <li className="rounded-2xl bg-canvas p-4"><b className="block text-ink">2 · Open the app</b>Scan the Expo code printed by <span className="font-mono">npx expo start --tunnel ngrok</span> in <span className="font-mono">mobile/</span>.</li>
           <li className="rounded-2xl bg-canvas p-4"><b className="block text-ink">3 · Pick your house</b>In Hizashi, scan one of the codes above.</li>
         </ol>
       </div>

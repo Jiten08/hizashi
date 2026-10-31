@@ -20,7 +20,7 @@ Three terminals for the demo:
 ```bash
 python -X utf8 -m honcho start          # 1. hub :8000 + the four house agents
 ngrok http 8000                         # 2. phones reach the hub (the hub detects the URL itself)
-cd mobile && npx expo start --tunnel    # 3. phone app: scan its QR with Expo Go
+cd mobile && npx expo start --tunnel ngrok   # 3. phone app: scan its QR with Expo Go
 ```
 
 - **Laptop:** http://localhost:8000/ is the street dashboard (desktop demo); `/console` has every control.
