@@ -12,6 +12,8 @@ export interface HubState extends Snapshot {
   connected: boolean;
   conn: Connection | null;
   ready: boolean;              // saved connection read from storage
+  failures: number;            // failed attempts to reach the hub since the last success
+  lastError: string | null;
 }
 
 const empty: Snapshot = {
@@ -22,7 +24,7 @@ const empty: Snapshot = {
   live: {}, sim_events: [], blocked: [], auctions: {},
 };
 
-let state: HubState = { ...empty, loaded: false, connected: false, conn: null, ready: false };
+let state: HubState = { ...empty, loaded: false, connected: false, conn: null, ready: false, failures: 0, lastError: null };
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<HubState>) {
@@ -110,14 +112,14 @@ export async function loadConnection(): Promise<void> {
 
 export async function connect(conn: Connection): Promise<void> {
   await AsyncStorage.setItem(KEY, JSON.stringify(conn));
-  set({ ...empty, conn, loaded: false, connected: false });
+  set({ ...empty, conn, loaded: false, connected: false, failures: 0, lastError: null });
   start();
 }
 
 export async function disconnect(): Promise<void> {
   stop();
   await AsyncStorage.removeItem(KEY);
-  set({ ...empty, conn: null, loaded: false, connected: false });
+  set({ ...empty, conn: null, loaded: false, connected: false, failures: 0, lastError: null });
 }
 
 function stop() {
@@ -132,14 +134,15 @@ function start() {
   const conn = state.conn;
   if (!conn) return;
   const client = new Api(conn.hub);
-  const retry = () => {
+  const retry = (err?: unknown) => {
     if (gen !== generation) return;
-    set({ connected: false });
+    set({ connected: false, failures: state.failures + 1, lastError: err ? String((err as Error).message ?? err) : state.lastError });
     timer = setTimeout(start, 1500);
   };
-  client.state().then((snap) => {
+  const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("no answer in 8 s")), 8000));
+  Promise.race([client.state(), timeout]).then((snap) => {
     if (gen !== generation) return;
-    set({ ...empty, ...snap, loaded: true });
+    set({ ...empty, ...snap, loaded: true, failures: 0, lastError: null });
     // React Native's WebSocket takes headers as a third argument; the header keeps ngrok's
     // browser warning page out of the way.
     ws = new (WebSocket as any)(client.wsUrl(conn.house), undefined, { headers: { "ngrok-skip-browser-warning": "1" } }) as WebSocket;
@@ -150,7 +153,7 @@ function start() {
       if (patch) set(patch);
       if (e.type === EV.CLOCK_TICK && e.data.reset) client.state().then((s) => set({ ...empty, ...s, loaded: true })).catch(() => {});
     };
-    ws.onclose = retry;
+    ws.onclose = () => retry();
     ws.onerror = () => ws?.close();
   }).catch(retry);
 }

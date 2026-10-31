@@ -13,10 +13,18 @@ export default function Index() {
   if (!hub.loaded || !info) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12, backgroundColor: C.bg }}>
-        <ActivityIndicator />
-        <Text style={T.headline}>Reaching your street…</Text>
+        {hub.failures < 3 ? <ActivityIndicator /> : null}
+        <Text style={[T.title3, { textAlign: "center" }]}>{hub.failures < 3 ? "Reaching your street…" : "Can't reach your street"}</Text>
         <Text style={[T.subhead, { textAlign: "center" }]}>{hub.conn.hub}</Text>
-        <Button title="Use a different code" kind="plain" onPress={disconnect} />
+        {hub.failures >= 3 ? (
+          <Text style={[T.footnote, { textAlign: "center" }]}>
+            {hub.conn.hub.startsWith("https://")
+              ? "Check that ngrok is still running on the laptop (ngrok http 8000) and the hub is started."
+              : "This address only works on the laptop's Wi-Fi. On another network, use ngrok and scan the new code."}
+            {hub.lastError ? ` (${hub.lastError})` : ""} Still trying every couple of seconds.
+          </Text>
+        ) : null}
+        <Button title="Scan a different code" kind="tinted" style={{ marginTop: 8, alignSelf: "stretch" }} onPress={disconnect} />
       </View>
     );
   }
