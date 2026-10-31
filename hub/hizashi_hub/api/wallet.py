@@ -7,8 +7,8 @@ from hizashi_shared.models import HOUSES, Contract, Mandate, Offer, PlanWindow
 
 from .. import clock
 from .. import state as hub_state
+from ..wallet import approvals, checks, signer
 from ..wallet import mandate as mandates
-from ..wallet import signer
 
 router = APIRouter(prefix="/wallet", tags=["wallet"])
 
@@ -59,8 +59,14 @@ async def sign(request: Request, house: str, body: dict = Body(...), authorizati
 
 
 @router.post("/{house}/plans")
-def post_plans(house: str, body: PlansBody, authorization: str | None = Header(None)) -> dict:
-    raise NotImplementedError("TODO(R2.5, Tezash)")
+async def post_plans(request: Request, house: str, body: PlansBody, authorization: str | None = Header(None)):
+    """-> {"status": "ok", "windows": [PlanWindow with status auto|pending|approved|declined]}"""
+    _house(house)
+    if not checks.token_ok(house, bearer(authorization)):
+        return JSONResponse({"status": "refused", "reason": f"This agent isn't allowed to plan for {house}."}, 401)
+    conn = request.app.state.db
+    saved = approvals.store_plans(conn, house, body.windows, mandates.current(conn, house), clock.get().now)
+    return {"status": "ok", "windows": [w.model_dump(mode="json") for w in saved]}
 
 
 @router.get("/{house}/mandate")

@@ -18,13 +18,16 @@ GUARD_FLAG = "guard.flag"
 GRID_OUTAGE = "grid.outage"
 CONSOLE_COMMAND = "console.command"
 MANDATE_UPDATED = "mandate.updated"
+SIM_EVENT = "sim.event"            # console cloud / ac / guests / away / outage started
+HOUSE_UPDATED = "house.updated"    # onboarding changed a roof, buyback rate or metering
 
 ALL = (
     CLOCK_TICK, BLOCK_STATE, FORECAST_UPDATED, PLAN_UPDATED, METER_READING,
     NEGO_OFFER, NEGO_RESULT, WALLET_BLOCKED, APPROVAL_REQUESTED, APPROVAL_RESOLVED,
     CONTRACT_BOOKED, MARKET_CLEARED, SETTLEMENT_DONE, SAVINGS_UPDATED, GUARD_FLAG,
-    GRID_OUTAGE, CONSOLE_COMMAND, MANDATE_UPDATED,
+    GRID_OUTAGE, CONSOLE_COMMAND, MANDATE_UPDATED, SIM_EVENT, HOUSE_UPDATED,
 )
 
-# Events an agent socket receives (section 6.1); meter.reading only its own.
-AGENT_EVENTS = (CLOCK_TICK, BLOCK_STATE, MARKET_CLEARED, APPROVAL_RESOLVED, CONSOLE_COMMAND, METER_READING)
+# Events an agent socket receives (section 6.1); the scoped ones only for its own house.
+AGENT_EVENTS = (CLOCK_TICK, BLOCK_STATE, MARKET_CLEARED, HOUSE_UPDATED, MANDATE_UPDATED,
+                APPROVAL_RESOLVED, CONSOLE_COMMAND, METER_READING, SETTLEMENT_DONE)

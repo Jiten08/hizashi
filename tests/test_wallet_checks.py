@@ -111,8 +111,15 @@ def test_check6_other_transformer():
 def test_check6_street_mode_and_market_orders_allowed():
     street_mode = MANDATES["h12"].model_copy(update={"counterparties": "street"})
     assert run(offer(to="h18"), mandate=street_mode).ok
-    assert run(offer(to=None)).ok
     assert run(offer(to="h12")).check == 6
+
+
+def test_market_orders_only_between_gate_and_auction():
+    gate_closed = lambda k: "GATE_CLOSED"
+    after_gate = datetime(2026, 10, 31, 11, 1, tzinfo=TZ)
+    assert run(offer(to=None), state=gate_closed, now=after_gate).ok
+    assert run(offer(to=None)).check == 3                                   # still OPEN
+    assert run(offer(to=None), state=gate_closed, now=datetime(2026, 10, 31, 12, 0, tzinfo=TZ)).check == 3
 
 
 def test_order_first_failure_wins():

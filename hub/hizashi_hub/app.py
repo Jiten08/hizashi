@@ -6,8 +6,10 @@ web/dist is served at / with SPA fallback (unknown non-/api paths return index.h
 
     uvicorn hizashi_hub.app:app --port 8000
 
-Not yet wired (later tasks): wallet keys (R1.1), weather fetch (R1.2), sim meters (R2.2),
-settlement and guard subscribers (R2.3, N2).
+Startup also loads (or fetches) the day's weather and builds the simulated street
+(sim/world.py): meters, console events, the market lifecycle (auction + settlement).
+The previous run's day rows are cleared, since the clock always starts at 05:00.
+Not yet wired: guard rules (N2).
 """
 import asyncio
 import logging
@@ -21,6 +23,8 @@ from hizashi_shared import config, street
 from hizashi_shared.models import Mandate
 
 from . import clock, db, state, ws
+from .sim import weather
+from .sim.world import Sim, clear_day
 from .api import router as api_router
 from .api import webhooks
 
@@ -43,10 +47,15 @@ async def lifespan(app: FastAPI):
     conn = db.connect(config.DB_PATH)
     db.init(conn)
     app.state.db = conn
+    clear_day(conn)
     hub_state = state.init(houses, load_mandates(conn), config.SIM_SPEED)
+    frame, source = await weather.load_weather(config.SIM_DAY)
+    hub_state.weather_source = source
     tasks = [asyncio.create_task(hub_state.run(), name="state")]
     await asyncio.sleep(0)  # let the state consumer subscribe before the clock publishes
     sim_clock = clock.init(config.SIM_DAY, config.SIM_SPEED)
+    app.state.sim = Sim(conn, hub_state.houses, hub_state.mandates, frame)
+    app.state.sim.wire(sim_clock)
     sim_clock.start()
     log.info("hub up: day %s at %sx, %d houses", config.SIM_DAY, config.SIM_SPEED, len(houses))
     try:

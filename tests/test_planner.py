@@ -81,9 +81,8 @@ def test_plan_day_and_windows():
     assert all(intents[i][0] == "sell" for i in range(26, 71))
 
     windows = plan_windows("h12", "2026-10-31", intents)
-    assert len(windows) == 1
-    w = windows[0]
-    assert w.first_index == 26
-    assert w.last_index == 70
-    assert w.side == "sell"
-    assert round(w.kwh, 2) == round(45 * 0.40, 2)
+    assert [(w.first_index, w.last_index) for w in windows] == [(26, 27), (28, 39), (40, 51), (52, 63), (64, 70)]
+    assert all(w.side == "sell" for w in windows)
+    assert round(sum(w.kwh for w in windows), 2) == round(45 * 0.40, 2)
+    w = windows[2]                                    # 10:00-13:00
+    assert w.kwh == 4.8 and w.expected_value == round(4.8 * 4.68, 2)

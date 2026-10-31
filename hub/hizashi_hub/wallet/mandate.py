@@ -9,6 +9,7 @@ from hizashi_shared import street
 from hizashi_shared.models import Event, Mandate
 
 from .. import bus
+from ..settlement import ledger
 
 
 def current(conn: sqlite3.Connection, house: str) -> Mandate:
@@ -32,7 +33,7 @@ def update(conn: sqlite3.Connection, house: str, new: Mandate, sim_time: datetim
         (house, version, saved.model_dump_json(), sim_time.isoformat()),
     )
     conn.commit()
-    # TODO(R2.4, Jiten): ledger entry for the mandate change
+    ledger.append(conn, sim_time.isoformat(), "mandate", f"{house}#v{version}", json.loads(saved.model_dump_json()))
     bus.publish(Event(type=ev.MANDATE_UPDATED, sim_time=sim_time, house=house,
                       data={"mandate": json.loads(saved.model_dump_json())}))
     return saved
