@@ -27,6 +27,7 @@ class HubState:
     def reset(self) -> None:
         """Forget everything that happened during the simulated day."""
         self.sim_time: datetime | None = None
+        self.sun: dict | None = None                 # {azimuth, elevation} from the last tick
         self.running = False
         self.blocks: dict[str, str] = {}             # block key -> BlockState
         self.forecasts: dict[str, list[dict]] = {}   # house -> forecasts
@@ -51,9 +52,11 @@ class HubState:
             self.sim_time = e.sim_time
             self.speed = d.get("speed", self.speed)
             self.running = d.get("running", self.running)
+            self.sun = d.get("sun", self.sun)
             if d.get("reset"):
                 self.reset()
                 self.sim_time = e.sim_time
+                self.sun = d.get("sun")
         elif e.type == ev.BLOCK_STATE:
             self.blocks[d["block"]] = d["state"]
         elif e.type == ev.MANDATE_UPDATED and e.house:
@@ -114,6 +117,7 @@ class HubState:
             "sim_time": self.sim_time.isoformat() if self.sim_time else None,
             "speed": self.speed,
             "running": self.running,
+            "sun": self.sun,
             "public_url": tunnel.public_url(),
             "houses": {h: info.model_dump(mode="json") for h, info in self.houses.items()},
             "mandates": {h: m.model_dump(mode="json") for h, m in self.mandates.items()},

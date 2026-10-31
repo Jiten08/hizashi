@@ -36,7 +36,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 log = logging.getLogger("hizashi.hub")
 
 RESERVED_PREFIXES = ("api/", "ws", "webhooks/", "docs", "openapi.json", "app/")
-MEDIA_TYPES = {".webmanifest": "application/manifest+json", ".js": "text/javascript"}
+MEDIA_TYPES = {".webmanifest": "application/manifest+json", ".js": "text/javascript", ".glb": "model/gltf-binary"}
 
 
 def load_mandates(conn) -> dict[str, Mandate]:

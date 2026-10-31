@@ -11,6 +11,7 @@ import { HaggleChat } from "../components/HaggleChat";
 import { HouseSvg } from "../components/HouseSvg";
 import { Button, Card, Clock, Icon, Logo, Segmented, toast } from "../components/ui";
 import { useHub } from "../hooks/useHub";
+import { useHubStore } from "../store/hub";
 import { api, blockIndex, blockKey, blockLabel, rupees } from "../lib/api";
 import { HOUSES, type House } from "../lib/types";
 
@@ -57,6 +58,7 @@ export default function Dashboard() {
         <Segmented value={hub.speed} onChange={(s) => api.setSpeed(s as 1 | 60 | 300).catch(() => {})}
           options={SPEEDS.map((s) => ({ value: s, label: `${s}×` }))} />
         <Button icon="qr" kind="tinted" onClick={() => setConnectOpen(true)}>Connect a phone</Button>
+        <Link to="/street/3d"><Button icon="sun" kind="tinted">3D street</Button></Link>
         <Link to="/console"><Button icon="sliders">Controls</Button></Link>
       </header>
 
@@ -163,7 +165,7 @@ function Big({ value, label, tone = "" }: { value: string; label: string; tone?:
 }
 
 function HouseCard({ house }: { house: House }) {
-  const hub = useHub("street");
+  const hub = useHubStore();      // the page's useHub owns the socket
   const info = hub.houses[house];
   const l = hub.live[house];
   const sv = hub.savings[house];

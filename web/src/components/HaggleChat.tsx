@@ -1,13 +1,13 @@
 // The latest haggle as a chat: each offer an agent made, its price, and what it said.
 // Prices and lines come from the hub (the wallet signed the offers; agents wrote the lines).
-import { useHub } from "../hooks/useHub";
+import { useHubStore } from "../store/hub";
 import { blockLabel, rupees } from "../lib/api";
 import type { Offer } from "../lib/types";
 
 const name = (h?: string | null) => (h ? `House ${h.slice(1)}` : "");
 
 export function HaggleChat() {
-  const hub = useHub("street");
+  const hub = useHubStore();
   // The newest neighbour-to-neighbour haggle, preferring one the agents have talked in.
   const all = Object.values(hub.negotiations).filter((os) => os[0]?.to != null);
   const talked = all.filter((os) => os.some((o) => hub.notes[o.offer_id]));

@@ -19,7 +19,7 @@ export const emptySnapshot: Snapshot = {
   houses: {} as Snapshot["houses"], mandates: {} as Snapshot["mandates"],
   blocks: {}, forecasts: {}, plans: {}, negotiations: {}, contracts: [], settlements: [],
   savings: {}, approvals: [], flags: [], outage: null, weather_source: null, recent_events: [],
-  live: {}, sim_events: [], blocked: [], auctions: {}, notes: {},
+  live: {}, sim_events: [], blocked: [], auctions: {}, notes: {}, sun: null,
 };
 
 const DAY_RESET: Partial<HubStore> = {
@@ -34,6 +34,7 @@ const reducers: Record<string, Reducer> = {
     sim_time: e.sim_time,
     speed: e.data.speed ?? s.speed,
     running: e.data.running ?? s.running,
+    sun: e.data.sun ?? s.sun,
     ...(e.data.reset ? DAY_RESET : {}),
   }),
   [EV.BLOCK_STATE]: (s, e) => ({ blocks: { ...s.blocks, [e.data.block]: e.data.state } }),

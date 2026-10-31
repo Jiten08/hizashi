@@ -14,7 +14,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 
-from hizashi_shared import blocks, config
+from hizashi_shared import blocks, config, solar
 from hizashi_shared import events as ev
 from hizashi_shared.models import BlockRef, Event
 
@@ -110,6 +110,7 @@ class SimClock:
             "running": self.running and not self.finished,
             "block": blocks.block_of(self.now).key,
             "day": self.day,
+            "sun": solar.sun_position(self.now),
         }
         if reset:
             data["reset"] = True

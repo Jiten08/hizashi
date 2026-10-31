@@ -153,6 +153,7 @@ export interface Snapshot {
   blocked: (Record<string, any> & { house: House })[];
   auctions: Record<string, Record<string, any>>;
   notes: Record<string, NegoNote>;
+  sun: { azimuth: number; elevation: number } | null;
 }
 
 export const EV = {
