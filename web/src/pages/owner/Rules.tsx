@@ -10,7 +10,7 @@ export function Money({ label, hint, value, onChange, step = 0.1, min = 0, max }
   label: string; hint: string; value: number; onChange: (v: number) => void; step?: number; min?: number; max?: number;
 }) {
   return (
-    <NumberField value={value} onChange={(v) => !Number.isNaN(v) && onChange(v)} minValue={min} maxValue={max} step={step}
+    <NumberField value={value} onChange={(v: number) => !Number.isNaN(v) && onChange(v)} minValue={min} maxValue={max} step={step}
       formatOptions={{ minimumFractionDigits: step < 1 ? 2 : 0, maximumFractionDigits: 2 }} className="w-full">
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
@@ -72,7 +72,7 @@ export default function Rules({ house, onEditSetup }: { house: House; onEditSetu
       <SectionTitle action={<Chip size="sm" variant="soft">v{current.version}</Chip>}>Your wallet's limits</SectionTitle>
       <Card>
         <Card.Content className="gap-5 p-4">
-          <Switch isSelected={!m.paused} onChange={(on) => set({ paused: !on })}>
+          <Switch isSelected={!m.paused} onChange={(on: boolean) => set({ paused: !on })}>
             <Switch.Content className="flex w-full items-center justify-between">
               <span>
                 <Label className="text-sm font-medium">Trading on</Label>

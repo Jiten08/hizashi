@@ -103,7 +103,7 @@ export default function Onboarding({ house, info, mandate, onDone, onCancel }: {
           <Question title="Tell us about your panels" sub="It's on your installation papers or the inverter label.">
             <Card>
               <Card.Content className="gap-3 p-4">
-                <Slider value={kwp} onChange={(v) => setKwp(Array.isArray(v) ? v[0] : v)} minValue={1} maxValue={10} step={0.5} className="w-full">
+                <Slider value={kwp} onChange={(v: any) => setKwp(Array.isArray(v) ? v[0] : v)} minValue={1} maxValue={10} step={0.5} className="w-full">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-medium">System size</Label>
                     <span className="num text-lg font-semibold">{kwp.toFixed(1)} kWp</span>
