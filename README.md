@@ -60,25 +60,35 @@ Hizashi runs a local energy market every 15 minutes. Each house gets an autonomo
 
 ## Architecture
 
-```
-Owners (phones)          Street screen (laptop/projector)
-     │  WebSocket /ws?role=owner        │  WebSocket /ws?role=street
-     └────────────────┬─────────────────┘
-                      │
-              ┌───────▼────────┐
-              │   Hub :8000    │  FastAPI + uvicorn
-              │                │  serves web/dist at /
-              │  market        │  serves mobile/dist at /app/
-              │  wallet        │  SQLite hizashi.db (WAL)
-              │  settlement    │
-              │  ledger        │
-              │  simulator     │
-              └────┬──┬──┬──┬──┘
-                   │  │  │  │   A2A JSON-RPC (tasks/send)
-        ┌──────────┘  │  │  └──────────┐
-        │             │  │             │
-   Agent h12    Agent h14  Agent h16   Agent h18
-    :9012         :9014      :9016       :9018
+```mermaid
+flowchart TD
+    %% Clients Layer
+    Phones["Owners (phones)<br/>React Native / Expo PWA (/app/)"]
+    Street["Street screen (laptop/projector)<br/>React Dashboard (/)"]
+
+    %% Central Hub
+    Hub["Hub :8000 (FastAPI + uvicorn)<br/>• market & auction<br/>• wallet & mandate guard<br/>• settlement & ledger<br/>• physics simulator<br/>• SQLite hizashi.db (WAL)"]
+
+    %% Autonomous Agents
+    A12["Agent h12<br/>:9012"]
+    A14["Agent h14<br/>:9014"]
+    A16["Agent h16<br/>:9016"]
+    A18["Agent h18<br/>:9018"]
+
+    %% Connections from UI to Hub
+    Phones -->|"WebSocket /ws?role=owner"| Hub
+    Street -->|"WebSocket /ws?role=street"| Hub
+
+    %% Connections from Hub to Agents
+    Hub <-->|"A2A JSON-RPC / WebSocket"| A12
+    Hub <-->|"A2A JSON-RPC / WebSocket"| A14
+    Hub <-->|"A2A JSON-RPC / WebSocket"| A16
+    Hub <-->|"A2A JSON-RPC / WebSocket"| A18
+
+    %% Peer-to-peer agent haggling
+    A12 <--->|"A2A Haggle"| A14
+    A14 <--->|"A2A Haggle"| A16
+    A16 <--->|"A2A Haggle"| A18
 ```
 
 ### Components
