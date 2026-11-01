@@ -61,34 +61,76 @@ Hizashi runs a local energy market every 15 minutes. Each house gets an autonomo
 ## Architecture
 
 ```mermaid
-flowchart TD
-    %% Clients Layer
-    Phones["Owners (phones)<br/>React Native / Expo PWA (/app/)"]
-    Street["Street screen (laptop/projector)<br/>React Dashboard (/)"]
+flowchart TB
+    %% Styling
+    classDef seller fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#065f46;
+    classDef buyer fill:#eff6ff,stroke:#2563eb,stroke-width:2px,color:#1e40af;
+    classDef hub fill:#fffbeb,stroke:#d97706,stroke-width:2px,color:#92400e;
+    classDef sec fill:#fef2f2,stroke:#dc2626,stroke-width:2px,color:#991b1b;
+    classDef ledger fill:#f8fafc,stroke:#475569,stroke-width:2px,color:#0f172a;
+    classDef screen fill:#f3e8ff,stroke:#7e22ce,stroke-width:2px,color:#581c87;
 
-    %% Central Hub
-    Hub["Hub :8000 (FastAPI + uvicorn)<br/>• market & auction<br/>• wallet & mandate guard<br/>• settlement & ledger<br/>• physics simulator<br/>• SQLite hizashi.db (WAL)"]
+    %% ---------------- STREET SCREEN (OBSERVER) ----------------
+    StreetScreen[" Street Screen (Laptop / Projector @ :8000/)<br/>Listens via WebSocket (/ws?role=street) · Shows live power exchange arcs & transformer T1 balance"]:::screen
 
-    %% Autonomous Agents
-    A12["Agent h12<br/>:9012"]
-    A14["Agent h14<br/>:9014"]
-    A16["Agent h16<br/>:9016"]
-    A18["Agent h18<br/>:9018"]
+    %% ---------------- HOUSE 12 (INDEPENDENT SELLER ENTITY) ----------------
+    subgraph House12["🏡 House 12 (Solar Producer / Seller Entity)"]
+        Phone12[" Owner 12 Phone (/app/?house=h12)<br/>Sets Mandate: Floor ₹4.00, Cap 2.0 kWh"]:::seller
+        Agent12[" Agent h12 (:9012)<br/>• pvlib solar forecast: 1.4 kWh<br/>• Safe surplus calculation: 0.8 kWh"]:::seller
+        Meter12[" Smart Meter 12<br/> Holds Ed25519 Private Key (h12.meter.key)<br/>Signs export reading every 60s"]:::seller
 
-    %% Connections from UI to Hub
-    Phones -->|"WebSocket /ws?role=owner"| Hub
-    Street -->|"WebSocket /ws?role=street"| Hub
+        Phone12 -->|"1. WebSocket: Owner Mandate & Live Alerts"| Agent12
+        Meter12 -.->|"2. Signed Meter Telemetry (Ed25519)"| Agent12
+    end
 
-    %% Connections from Hub to Agents
-    Hub <-->|"A2A JSON-RPC / WebSocket"| A12
-    Hub <-->|"A2A JSON-RPC / WebSocket"| A14
-    Hub <-->|"A2A JSON-RPC / WebSocket"| A16
-    Hub <-->|"A2A JSON-RPC / WebSocket"| A18
+    %% ---------------- HOUSE 14 (INDEPENDENT BUYER ENTITY) ----------------
+    subgraph House14["🏡 House 14 (Power Consumer / Buyer Entity)"]
+        Phone14[" Owner 14 Phone (/app/?house=h14)<br/>Sets Mandate: Ceiling ₹5.20, Needs 0.8 kWh"]:::buyer
+        Agent14[" Agent h14 (:9014)<br/>• Load prediction: AC on deficit<br/>• Safe demand calculation: 0.8 kWh"]:::buyer
+        Meter14[" Smart Meter 14<br/> Holds Ed25519 Private Key (h14.meter.key)<br/>Signs import reading every 60s"]:::buyer
 
-    %% Peer-to-peer agent haggling
-    A12 <--->|"A2A Haggle"| A14
-    A14 <--->|"A2A Haggle"| A16
-    A16 <--->|"A2A Haggle"| A18
+        Phone14 -->|"1. WebSocket: Owner Mandate & Live Alerts"| Agent14
+        Meter14 -.->|"2. Signed Meter Telemetry (Ed25519)"| Agent14
+    end
+
+    %% ---------------- PEER-TO-PEER NEGOTIATION ----------------
+    Agent12 <===>|"3. A2A JSON-RPC Protocol (HTTP POST)<br/>Concession curves: Ask ₹4.40 ⟷ Bid ₹4.55<br/>Haggles to agreed price: ₹4.47/kWh"| Agent14
+
+    %% ---------------- CENTRAL HUB & SECURITY ----------------
+    subgraph CentralHub["🏛️ Hizashi Central Hub (:8000)"]
+        subgraph SecurityValidation["🛡️ Security & Mandate Gate"]
+            WalletGuard["Wallet Mandate & Key Guard (checks.py)<br/>• Verifies Ed25519 signatures from Agents<br/>• Checks 8 Mandate Rules (Max Cap, Price Bounds)<br/>• Blocks Rogue Orders (e.g. Reject ₹40 attack bid)"]:::sec
+        end
+
+        subgraph MarketClearing["⚡ Market & Clearing Engine"]
+            AuctionEngine["Block Lifecycle & Auction<br/>• Gate closure 4 blocks ahead<br/>• Uniform Price Matching (clears at ₹4.47)<br/>• Generates cryptographically binding Contract"]:::hub
+        end
+
+        subgraph SettlementEngine["⚖️ Verification & Settlement"]
+            SettlementVerifier["Settlement Engine (settle.py)<br/>• Verifies Ed25519 signatures from physical meters<br/>• Cross-checks promised kWh vs delivered kWh<br/>• Computes ₹4.47/kWh payout + ₹0.14/kWh hub fee<br/>• Assesses shortfall penalties"]:::sec
+        end
+
+        subgraph LedgerChain["🔗 Audit Trail"]
+            Ledger[("Immutable SHA-256 Hash Chain (hizashi.db)<br/>Block Hash = SHA256(PrevHash + Contract + MeterSigs)<br/>Tamper-evident verification at /api/ledger/verify")]:::ledger
+        end
+
+        WalletGuard -->|"4. Validated Signed Orders"| AuctionEngine
+        AuctionEngine -->|"5. Booked Contract"| SettlementVerifier
+        SettlementVerifier -->|"6. Commit Settlement Record"| Ledger
+    end
+
+    %% Submitting orders to hub
+    Agent12 -->|"Signed Ask Offer"| WalletGuard
+    Agent14 -->|"Signed Bid Offer"| WalletGuard
+
+    %% Meter direct verification to Settlement
+    Meter12 -.->|"Signed Export Proof"| SettlementVerifier
+    Meter14 -.->|"Signed Import Proof"| SettlementVerifier
+
+    %% Observability broadcast
+    CentralHub -.->|"Broadcast Real-Time Block State & Trades (/ws)"| StreetScreen
+    CentralHub -.->|"Broadcast Live Savings & Approvals"| Phone12
+    CentralHub -.->|"Broadcast Live Savings & Approvals"| Phone14
 ```
 
 ### Components
