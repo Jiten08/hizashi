@@ -11,6 +11,15 @@
     <link rel="apple-touch-icon" href="/app/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/app/icon.svg" />
     <title>Hizashi</title>
+    <script>
+      // ngrok's free tunnel answers any browser request without this cookie with its warning page:
+      // that breaks the live socket and the service worker's update check (the phone keeps an old
+      // app). It's the cookie ngrok's "Visit Site" sets; set it here for a year, before anything loads.
+      try {
+        if (/\.ngrok(-free)?\.(app|dev|io)$/.test(location.hostname))
+          document.cookie = "abuse_interstitial=" + location.hostname + "; path=/; max-age=31536000; SameSite=Lax; Secure";
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

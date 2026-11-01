@@ -127,12 +127,11 @@ async def post_event(request: Request, body: ConsoleEventBody) -> dict:
         return {"status": "ok", **data}
     if body.type == "ask_owner":
         return ask_owner(conn, body.house, now)  # type: ignore[arg-type]
-    # impostor: claims to be House 16, sells at ₹40, signed with its own key; the market's door
-    # checks the signature against House 16's wallet and blacklists the key.
-    key = attacks.impostor_key()
-    ref = attacks.next_open_block(clock.get().block_states, now)
-    offer = attacks.impostor_ask("h16", ref, key)
-    refusal = enter_market(conn, offer, attacks.pubkey(key))
+    # impostor: "House 20", an outsider with no wallet on the registry, tries to sell at ₹40;
+    # the market's door refuses it and blacklists its key.
+    key = attacks.outsider_key()
+    ask = attacks.outsider_ask(attacks.next_open_block(clock.get().block_states, now), key)
+    refusal = enter_market(conn, ask, attacks.pubkey(key))
     return {"status": "refused" if refusal else "let in", "reason": refusal}
 
 

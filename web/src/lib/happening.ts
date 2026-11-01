@@ -17,7 +17,7 @@ const TONE: Record<string, Tone> = { cloud: "cloud", ac: "load", guests: "load",
 
 export function useHappening(): {
   all: Happening[]; byHouse: Record<House, Happening[]>; outageUntil: string | null; dayOver: boolean;
-  impostor: { claimed: string; price: number } | null;
+  impostor: { claimed: string; price: number; registered: boolean } | null;
 } {
   const simTime = useHubStore((s) => s.sim_time);
   const running = useHubStore((s) => s.running);
@@ -30,7 +30,7 @@ export function useHappening(): {
     const recent = (ts: string | null | undefined) => !!ts && now - Date.parse(ts) >= 0 && now - Date.parse(ts) <= RECENT_MIN * 60_000;
     const all: Happening[] = [];
     let outageUntil: string | null = null;
-    let impostor: { claimed: string; price: number } | null = null;
+    let impostor: { claimed: string; price: number; registered: boolean } | null = null;
 
     simEvents.forEach((e, i) => {
       if (Date.parse(e.start) > now || Date.parse(e.end) <= now) return;
@@ -60,9 +60,9 @@ export function useHappening(): {
     flags.forEach((f, i) => {
       if (!recent(f.ts)) return;
       if (f.kind === "impostor") {
-        impostor = { claimed: String(f.detail?.claimed ?? ""), price: Number(f.detail?.price ?? 0) };
+        impostor = { claimed: String(f.detail?.claimed ?? ""), price: Number(f.detail?.price ?? 0), registered: !!f.detail?.registered };
         all.push({ key: `fl${i}`, house: null, tone: "alert", scope: "none",
-          label: `Impostor “House ${String(f.detail?.claimed ?? "").slice(1)}” at ₹${Number(f.detail?.price ?? 0).toFixed(2)} blacklisted` });
+          label: `Outsider “House ${String(f.detail?.claimed ?? "").slice(1)}” at ₹${Number(f.detail?.price ?? 0).toFixed(2)} blacklisted` });
         return;
       }
       for (const h of f.houses ?? []) all.push({ key: `fl${i}${h}`, house: h as House, tone: "alert", scope: "house", label: String(f.title ?? "Guard flag") });

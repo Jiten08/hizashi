@@ -39,25 +39,35 @@ def flags():
     watch._guard = None
 
 
-def test_impostor_is_blacklisted_on_entry_and_bounces_after(conn, flags):
+def test_outsider_is_blacklisted_on_entry_and_bounces_after(conn, flags):
     guard = watch.get()
     key = crypto.new_key()
-    ask = attacks.impostor_ask("h16", BlockRef(day=DAY, index=48), key)
-    assert ask.price == 40.0 and ask.house == "h16" and ask.to is None
+    ask = attacks.outsider_ask(BlockRef(day=DAY, index=48), key)
+    assert ask["house"] == "h20" and ask["price"] == 40.0 and ask["to"] is None
 
     reason = guard.screen_seller(conn, ask, attacks.pubkey(key), NOW)
-    assert reason.startswith("A seller claiming to be House 16 offered 0.50 kWh at ₹40.00")
+    assert reason == ("A seller calling itself House 20 tried to sell 0.50 kWh at ₹40.00, but House 20 isn't on "
+                      "this street's registry (no wallet key on file). Blacklisted on entry; nothing traded.")
     [f] = flags()
-    assert f.data["kind"] == "impostor" and f.data["title"] == "Impostor blacklisted" and f.data["houses"] == []
-    assert attacks.pubkey(key) in guard.blacklist
+    assert f.data["kind"] == "impostor" and f.data["title"] == "Outsider blacklisted" and f.data["houses"] == []
+    assert f.data["detail"]["claimed"] == "h20" and attacks.pubkey(key) in guard.blacklist
 
-    again = guard.screen_seller(conn, attacks.impostor_ask("h16", BlockRef(day=DAY, index=49), key),
-                                attacks.pubkey(key), NOW)
-    assert again == "Blacklisted: this key already pretended to be House 16." and flags() == []
+    again = guard.screen_seller(conn, attacks.outsider_ask(BlockRef(day=DAY, index=49), key), attacks.pubkey(key), NOW)
+    assert again == "Blacklisted: House 20 was already turned away." and flags() == []
 
-    # The real House 16 still gets in.
-    real = attacks.impostor_ask("h16", BlockRef(day=DAY, index=48), KEYS["h16"])
-    assert guard.screen_seller(conn, real, crypto.pub_b64(KEYS["h16"]), NOW) is None
+
+def test_registered_name_with_the_wrong_signature_is_caught_too(conn, flags):
+    guard = watch.get()
+    real = signer.sign_offer("h16", offer_as("h16"), KEYS["h16"])
+    assert guard.screen_seller(conn, real.model_dump(mode="json"), crypto.pub_b64(KEYS["h16"]), NOW) is None
+    forged = signer.sign_offer("h16", offer_as("h16"), crypto.new_key())
+    assert "isn't House 16's wallet" in guard.screen_seller(conn, forged.model_dump(mode="json"), "k2", NOW)
+
+
+def offer_as(house):
+    from hizashi_shared.models import Offer
+    return Offer(offer_id="o1", negotiation_id="market-x", block=BlockRef(day=DAY, index=48), side="ask", house=house,
+                 to=None, kwh=0.5, price=5.0, round=0, expires_at=NOW, nonce="n1")
 
 
 def test_ask_owner_holds_buys_until_the_owner_decides(conn, monkeypatch):

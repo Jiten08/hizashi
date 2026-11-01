@@ -36,29 +36,32 @@ async def book_contract(request: Request, body: dict = Body(...), authorization:
     return {"status": "booked", "contract": booked.model_dump(mode="json")}
 
 
-def enter_market(conn, offer: Offer, presented_key: str | None) -> str | None:
-    """The door: a seller's signature must be its house's registered wallet key (the guard
-    blacklists impostors); None lets the order in."""
+def enter_market(conn, raw: dict, presented_key: str | None) -> str | None:
+    """The door: the seller must be a registered house and the order must carry that house's wallet
+    signature (the guard blacklists anyone else); None lets the order in."""
     guard = watch.get()
     if guard is not None:
-        return guard.screen_seller(conn, offer, presented_key, clock.get().now)
-    info = hub_state.get().houses.get(offer.house)
-    if not info or not crypto.verify(offer, offer.signature, info.wallet_pubkey or ""):
-        return "The order doesn't carry this house's wallet signature."
-    return None
+        return guard.screen_seller(conn, raw, presented_key, clock.get().now)
+    info = hub_state.get().houses.get(str(raw.get("house")))
+    try:
+        ok = info is not None and crypto.verify(Offer.model_validate(raw), raw.get("signature"), info.wallet_pubkey or "")
+    except ValidationError:
+        ok = False
+    return None if ok else "The order doesn't carry a registered house's wallet signature."
 
 
 @router.post("/orders")
 async def post_order(request: Request, body: dict = Body(...), authorization: str | None = Header(None)):
     """Body: a wallet-signed Offer with to=None, bare or as {"offer": {...}}. Only while the
     block is GATE_CLOSED and its auction hasn't run. -> {"status": "queued"} | refused"""
-    try:
-        offer = Offer.model_validate(body.get("offer", body))
-    except ValidationError as e:
-        return JSONResponse({"status": "refused", "reason": f"That order isn't well-formed: {e.errors()[0]['msg']}."}, 422)
-    refusal = enter_market(request.app.state.db, offer, body.get("key"))
+    raw = body.get("offer", body)
+    refusal = enter_market(request.app.state.db, raw, body.get("key"))
     if refusal:
         return JSONResponse({"status": "refused", "reason": refusal}, 403)
+    try:
+        offer = Offer.model_validate(raw)
+    except ValidationError as e:
+        return JSONResponse({"status": "refused", "reason": f"That order isn't well-formed: {e.errors()[0]['msg']}."}, 422)
     if not checks.token_ok(offer.house, bearer(authorization)):
         return JSONResponse({"status": "refused", "reason": "Only the house's own agent can post its orders."}, 401)
     if offer.to is not None:

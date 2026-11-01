@@ -67,9 +67,9 @@ export default function Console() {
                 Ask House {h.slice(1)}'s owner for a big buy
               </Button>
             ))}
-            <Button icon="ban" kind="danger" onClick={() => run("Impostor “House 16” tries to sell at ₹40", () => api.consoleEvent("impostor"))}>Impostor “House 16” sells at ₹40</Button>
+            <Button icon="ban" kind="danger" onClick={() => run("Outsider “House 20” tries to sell at ₹40", () => api.consoleEvent("impostor"))}>Outsider “House 20” sells at ₹40</Button>
           </div>
-          <p className="mt-3 text-[12px] text-ink-2">The owner's phone gets Approve / Decline; the street shows the answer. The impostor is blacklisted the moment it enters the market (its signature isn't House 16's).</p>
+          <p className="mt-3 text-[12px] text-ink-2">The owner's phone gets Approve / Decline; the street shows the answer. “House 20” isn't on the street's registry, so it's blacklisted the moment it enters the market.</p>
         </Card>
         <Card title="Ledger">
           <p className="text-sm text-ink-2">Re-hash every entry from the first; an edited row breaks the chain.</p>

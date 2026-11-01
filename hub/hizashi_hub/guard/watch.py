@@ -26,7 +26,7 @@ TITLES = {
     "wash_trade": "Wash trade refused",
     "collusion": "Price-fixing caught",
     "replay": "Replay refused",
-    "impostor": "Impostor blacklisted",
+    "impostor": "Outsider blacklisted",
 }
 
 
@@ -67,24 +67,35 @@ class Guard:
 
     # --- sellers entering the market -------------------------------------------------------
 
-    def screen_seller(self, conn: sqlite3.Connection, offer: Offer, presented_key: str | None,
+    def screen_seller(self, conn: sqlite3.Connection, raw: dict, presented_key: str | None,
                       now: datetime) -> str | None:
-        """None if the order really comes from the house it names. Otherwise a refusal: a key the guard
-        has blacklisted bounces at once; a signature that isn't the house's registered wallet gets the
-        sender's key blacklisted and one street-wide flag (the real house isn't blamed)."""
-        name = f"House {offer.house[1:]}"
+        """The market's door, before an order is even parsed. None if the seller is a registered house
+        and the order carries that house's wallet signature. Otherwise a refusal: a blacklisted key
+        bounces at once; a seller that isn't on the registry, or whose signature isn't its house's
+        wallet, gets its key blacklisted and one street-wide flag (no real house is blamed)."""
+        house = str(raw.get("house") or "?")
+        name = f"House {house[1:]}" if house.startswith("h") else house
         if presented_key and presented_key in self.blacklist:
-            return f"Blacklisted: this key already pretended to be {self.blacklist[presented_key]['claimed']}."
-        info = self.houses.get(offer.house)
-        if info is not None and crypto.verify(offer, offer.signature, info.wallet_pubkey or ""):
-            return None
-        reason = (f"A seller claiming to be {name} offered {offer.kwh:.2f} kWh at ₹{offer.price:.2f}, but the "
-                  f"signature isn't {name}'s wallet. Blacklisted on entry; nothing traded.")
+            return f"Blacklisted: {self.blacklist[presented_key]['claimed']} was already turned away."
+        info = self.houses.get(house)
+        if info is None:
+            why = f"{name} isn't on this street's registry (no wallet key on file)"
+        else:
+            try:
+                ok = crypto.verify(Offer.model_validate(raw), raw.get("signature"), info.wallet_pubkey or "")
+            except Exception:
+                ok = False
+            if ok:
+                return None
+            why = f"the signature on this ask isn't {name}'s wallet"
+        reason = (f"A seller calling itself {name} tried to sell {float(raw.get('kwh', 0)):.2f} kWh at "
+                  f"₹{float(raw.get('price', 0)):.2f}, but {why}. Blacklisted on entry; nothing traded.")
         if presented_key:
             self.blacklist[presented_key] = {"claimed": name, "ts": now.isoformat()}
         self.flag(conn, "impostor", [], reason, now,
-                  {"claimed": offer.house, "price": offer.price, "kwh": offer.kwh, "key": presented_key},
-                  once=(presented_key or offer.offer_id,))
+                  {"claimed": house, "price": raw.get("price"), "kwh": raw.get("kwh"), "key": presented_key,
+                   "registered": info is not None},
+                  once=(presented_key or str(raw.get("offer_id")),))
         return reason
 
     # --- offers (wallet, before signing) ----------------------------------------------------

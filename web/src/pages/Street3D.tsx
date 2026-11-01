@@ -232,8 +232,8 @@ function SimPanel() {
 
       <p className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-3">Attack</p>
       <Button small icon="ban" kind="danger" className="w-full"
-        onClick={() => run("Impostor “House 16” tries to sell at ₹40", () => api.consoleEvent("impostor"))}>
-        Impostor “House 16” sells at ₹40
+        onClick={() => run("Outsider “House 20” tries to sell at ₹40", () => api.consoleEvent("impostor"))}>
+        Outsider “House 20” sells at ₹40
       </Button>
 
       <p className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-3">Day</p>
@@ -330,7 +330,7 @@ const Scene = memo(function Scene({ quality }: { quality: Quality }) {
         <HouseOnStreet key={h} house={h} scale={scale} cloud={byHouse[h].some((x) => x.tone === "cloud")}
           flag={flagged.get(h)} chips={byHouse[h]} onTop={onTop} />
       ))}
-      {impostor && <Impostor claimed={impostor.claimed} price={impostor.price} />}
+      {impostor && <Impostor claimed={impostor.claimed} price={impostor.price} registered={impostor.registered} />}
       {!outage && live.map((c) => <PowerArc key={c.contract_id} contract={c} sellerTop={tops[c.seller] ?? 2.5} buyerTop={tops[c.buyer] ?? 2.5} />)}
       <OrbitControls target={[0, 1.2, 0]} autoRotate autoRotateSpeed={0.35} enablePan={false}
         minDistance={12} maxDistance={45} maxPolarAngle={1.38} />
@@ -558,8 +558,8 @@ function FlagRing() {
   );
 }
 
-/** The impostor that tried to enter the market: a red ghost at the street's entrance, turned away. */
-function Impostor({ claimed, price }: { claimed: string; price: number }) {
+/** The outsider that tried to enter the market: a red ghost at the street's entrance, turned away. */
+function Impostor({ claimed, price, registered }: { claimed: string; price: number; registered: boolean }) {
   const ref = useRef<THREE.Group>(null);
   useFrame(({ clock }) => { if (ref.current) ref.current.position.y = 0.15 + Math.sin(clock.elapsedTime * 2) * 0.1; });
   return (
@@ -582,7 +582,7 @@ function Impostor({ claimed, price }: { claimed: string; price: number }) {
         <div className="pointer-events-none flex flex-col items-center gap-1 whitespace-nowrap">
           <span className="rounded-full bg-alert px-3 py-1 text-[13px] font-semibold text-white shadow">✗ Blacklisted</span>
           <span className="rounded-full bg-white/90 px-2.5 py-0.5 text-[12px] font-medium text-ink shadow">
-            Fake “House {claimed.slice(1)}” · ask ₹{price.toFixed(2)} · wrong signature
+            “House {claimed.slice(1)}” · ask ₹{price.toFixed(2)} · {registered ? "wrong signature" : "not on the registry"}
           </span>
         </div>
       </Html>

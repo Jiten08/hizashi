@@ -1,25 +1,27 @@
-"""The console's one attack demo: an impostor seller.
+"""The console's one attack demo: an outsider tries to sell.
 
-Someone claiming to be House 16 enters the street market with an ask at ₹40/kWh, signed with a key
-House 16's wallet never had (they can copy a name, not a private key). The market checks every
-seller's signature against the registered wallet key before taking the order, so the impostor is
-refused and its key blacklisted on the spot; every later try from that key bounces at the door.
+"House 20" isn't on this street's registry (no wallet key on file), yet it walks into the market
+with an ask at ₹40/kWh, signed with its own key. The market checks every seller against the
+registry before taking an order, so the outsider is refused and its key blacklisted on the spot;
+every later try from that key bounces at the door.
 """
+import json
 import uuid
 from datetime import datetime
 
 from nacl.signing import SigningKey
 
 from hizashi_shared import blocks, crypto
-from hizashi_shared.models import BlockRef, Offer
+from hizashi_shared.models import BlockRef
 
-IMPOSTOR_PRICE = 40.0
-IMPOSTOR_KWH = 0.5
+OUTSIDER = "h20"
+OUTSIDER_PRICE = 40.0
+OUTSIDER_KWH = 0.5
 
-_key: SigningKey | None = None       # one impostor per hub run, so a second try shows the blacklist
+_key: SigningKey | None = None       # one outsider per hub run, so a second try shows the blacklist
 
 
-def impostor_key() -> SigningKey:
+def outsider_key() -> SigningKey:
     global _key
     if _key is None:
         _key = SigningKey.generate()
@@ -31,12 +33,13 @@ def next_open_block(block_states: dict[str, str], now: datetime) -> BlockRef:
     return blocks.parse_key(keys[0]) if keys else blocks.block_of(now)
 
 
-def impostor_ask(claim: str, ref: BlockRef, key: SigningKey) -> Offer:
-    """A street-wide ask (to=None) in `claim`'s name, signed with the impostor's own key."""
-    offer = Offer(offer_id=str(uuid.uuid4()), negotiation_id=f"market-{ref.key}", block=ref, side="ask",
-                  house=claim, to=None, kwh=IMPOSTOR_KWH, price=IMPOSTOR_PRICE, round=0,  # type: ignore[arg-type]
-                  expires_at=blocks.block_start(ref), nonce=str(uuid.uuid4()))
-    return offer.model_copy(update={"signature": crypto.sign(offer, key)})
+def outsider_ask(ref: BlockRef, key: SigningKey, house: str = OUTSIDER) -> dict:
+    """A street-wide ask as the raw JSON a seller sends (an Offer can only name registered houses)."""
+    ask = {"offer_id": str(uuid.uuid4()), "negotiation_id": f"market-{ref.key}", "block": ref.model_dump(mode="json"),
+           "side": "ask", "house": house, "to": None, "kwh": OUTSIDER_KWH, "price": OUTSIDER_PRICE, "round": 0,
+           "expires_at": blocks.block_start(ref).isoformat(), "nonce": str(uuid.uuid4())}
+    body = json.dumps(ask, sort_keys=True, separators=(",", ":")).encode()
+    return {**ask, "signature": key.sign(body).signature.hex()}
 
 
 def pubkey(key: SigningKey) -> str:

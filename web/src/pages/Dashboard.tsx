@@ -133,7 +133,7 @@ export default function Dashboard() {
             <Button icon="bolt" onClick={() => run("AC on at House 14", () => api.consoleEvent("ac", "h14", 120))}>AC on at House 14 (2 h)</Button>
             <Button icon="plug" onClick={() => run("Grid outage", () => api.consoleEvent("outage", undefined, 30))}>Grid outage (30 min)</Button>
             <Button icon="check" kind="tinted" onClick={() => run("Asking House 14's owner (check the phone)", () => api.consoleEvent("ask_owner", "h14"))}>Ask House 14's owner for a big buy</Button>
-            <Button icon="ban" kind="danger" onClick={() => run("Impostor “House 16” tries to sell at ₹40", () => api.consoleEvent("impostor"))}>Impostor “House 16” sells at ₹40</Button>
+            <Button icon="ban" kind="danger" onClick={() => run("Outsider “House 20” tries to sell at ₹40", () => api.consoleEvent("impostor"))}>Outsider “House 20” sells at ₹40</Button>
             <Button icon="reset" onClick={() => run("Day reset", api.reset)}>Reset the day</Button>
           </div>
         </Card>
