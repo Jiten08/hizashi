@@ -11,6 +11,8 @@ from .models import BlockRef, Schedule
 
 AWAY = 0.4
 GUESTS = 1.4
+CLOUD_FACTOR = 0.3       # solar under a passing cloud (console event)
+AC_KW = 1.0              # an AC switched on adds this much use (console event)
 FACTOR = {"away": AWAY, "guests": GUESTS}
 
 

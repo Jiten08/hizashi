@@ -14,6 +14,7 @@ from hizashi_shared.models import Contract, Event, HouseInfo
 from .. import bus
 from ..guard import watch
 from ..settlement import ledger
+from ..sim import events as sim_events
 from ..wallet import keystore
 
 BlockStateFn = Callable[[str], str | None]
@@ -52,6 +53,9 @@ def book(conn: sqlite3.Connection, contract: Contract, street: dict[str, HouseIn
     """Verify, add market_sig, store (status 'booked'), publish contract.booked to both houses."""
     if conn.execute("SELECT 1 FROM contracts WHERE contract_id = ?", (contract.contract_id,)).fetchone():
         raise BookingError("This contract is already booked.")
+    outage = sim_events.outage_reason(contract.block)
+    if outage:
+        raise BookingError(outage)
     contract = verify(contract, street, block_state_fn, now)
     guard = watch.get()
     if guard:

@@ -16,7 +16,7 @@ from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
 from a2a.types import Message, Role, TaskState
 
-from hizashi_shared import config, crypto, street
+from hizashi_shared import blocks, config, crypto, street
 from hizashi_shared.models import Contract, HouseInfo, Mandate, Offer
 from . import negotiator
 
@@ -72,7 +72,8 @@ class HouseExecutor(AgentExecutor):
 
     def is_block_open(self, block_key: str) -> bool:
         if self.runtime:
-            return self.runtime.block_states.get(block_key) == "OPEN"
+            return (self.runtime.block_states.get(block_key) == "OPEN"
+                    and not self.runtime.outage_over(blocks.parse_key(block_key).index))
         return True  # default for tests
 
     def _verify_sig(self, model: Offer | Contract, sig: str | None, pub_key: str | None) -> bool:

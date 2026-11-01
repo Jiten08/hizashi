@@ -14,7 +14,7 @@ from hizashi_shared.models import HouseInfo
 from .events import SimEvents
 from .pv import MINUTES, _seed, minute_of_day
 
-AC_KW = 1.0
+AC_KW = schedule.AC_KW
 GUESTS = schedule.GUESTS
 AWAY = schedule.AWAY
 MIN_KW = 0.02

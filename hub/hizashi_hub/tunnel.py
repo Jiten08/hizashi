@@ -3,14 +3,15 @@ tunnel a local ngrok agent reports (http://127.0.0.1:4040/api/tunnels); else thi
 laptop's address on the local Wi-Fi (http://192.168.x.x:8000), which works for any
 phone on the same network.
 
-When the hub starts without PUBLIC_URL or a running tunnel, it starts ngrok itself (if ngrok is
-installed; AUTO_NGROK=0 turns this off), so phones on any network can scan the QR codes.
+When the hub starts and no tunnel is running, it starts ngrok itself (if installed; AUTO_NGROK=0 turns
+this off): on PUBLIC_URL when that is an ngrok domain, so the QR codes stay the same every run.
 """
 import logging
 import os
 import shutil
 import socket
 import subprocess
+import threading
 import time
 
 import httpx
@@ -68,22 +69,51 @@ def public_url() -> str | None:
     return url
 
 
+NGROK_HOSTS = (".ngrok-free.dev", ".ngrok-free.app", ".ngrok.app", ".ngrok.dev", ".ngrok.io")
+
+
+def _ngrok_domain(url: str) -> bool:
+    host = url.split("://", 1)[-1].split("/", 1)[0]
+    return host.endswith(NGROK_HOSTS)
+
+
 def start_ngrok() -> None:
-    """Start `ngrok http 8000` in the background unless there is already a public address.
-    A failure only means the QR codes use the Wi-Fi address; the hub carries on."""
+    """Start ngrok in the background unless a tunnel is already up: on PUBLIC_URL when that is an
+    ngrok domain (the account's fixed one, so the QR codes never change), else on a new address.
+    A failure only means phones need the laptop's Wi-Fi; the hub carries on."""
     global _proc
-    if config.PUBLIC_URL or os.environ.get("AUTO_NGROK", "1") in ("0", "false", "False") or ngrok_url():
+    if os.environ.get("AUTO_NGROK", "1") in ("0", "false", "False") or ngrok_url():
         return
+    if config.PUBLIC_URL and not _ngrok_domain(config.PUBLIC_URL):
+        return                          # someone else's tunnel (cloudflared etc.)
     exe = shutil.which("ngrok")
     if exe is None:
-        log.info("ngrok isn't installed; phones need the same Wi-Fi as this laptop")
+        log.warning("ngrok isn't installed; phones need the same Wi-Fi as this laptop")
         return
+    args = [exe, "http", str(config.HUB_PORT), "--log=stdout"]
+    if config.PUBLIC_URL:
+        args.append(f"--url={config.PUBLIC_URL}")
     try:
-        _proc = subprocess.Popen([exe, "http", str(config.HUB_PORT), "--log=stdout"],
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        log.info("started ngrok for the phones' QR codes")
+        _proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError as e:
         log.warning("couldn't start ngrok (%s); phones need the same Wi-Fi as this laptop", e)
+        return
+    threading.Thread(target=_report, args=(_proc,), daemon=True).start()
+
+
+def _report(proc: subprocess.Popen) -> None:
+    """Say in the hub's log whether the tunnel came up (ngrok exits at once on a bad token or domain)."""
+    for _ in range(30):
+        if proc.poll() is not None:
+            log.warning("ngrok stopped (exit %s); run `ngrok http 8000%s` to see why", proc.returncode,
+                        f" --url={config.PUBLIC_URL}" if config.PUBLIC_URL else "")
+            return
+        url = ngrok_url()
+        if url:
+            log.info("phones reach the hub at %s (ngrok)", url)
+            return
+        time.sleep(0.5)
+    log.warning("ngrok started but no tunnel showed up after 15 s")
 
 
 def stop_ngrok() -> None:

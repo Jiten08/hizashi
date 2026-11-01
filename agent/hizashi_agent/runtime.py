@@ -22,6 +22,9 @@ from . import forecaster, negotiator, planner
 from .a2a_client import negotiate_sale
 from .hub_client import HubClient
 
+CLOUD_FACTOR = schedule.CLOUD_FACTOR
+AC_KW = schedule.AC_KW
+
 log = logging.getLogger("hizashi.agent.runtime")
 
 
@@ -44,6 +47,7 @@ class Runtime:
         self.actual: dict[int, dict[str, float]] = {}   # block -> metered solar/use kWh so far
         self.schedules: list[Schedule] = []             # the owner's away / guests plans
         self.collude: dict | None = None                # {"price", "blocks"} while the collusion demo runs
+        self.sim_events: list[dict] = []                # console cloud / ac / guests / away / outage it has heard of
 
 
         # Load initial street & mandates synchronously from local data
@@ -185,6 +189,9 @@ class Runtime:
         rem = self.remaining_sell.get(block_ref.index, 0.0)
         if rem <= config.MIN_TRADE_KWH:
             return
+        if self.outage_over(block_ref.index):
+            log.info("%s not selling %s: grid outage", self.house, block_ref.key)
+            return
         self._negotiating_blocks.add(block_ref.key)
 
         me_info = self.houses.get(self.house)
@@ -262,6 +269,9 @@ class Runtime:
         if not me or not mandate:
             return
         i = block_ref.index
+        if self.outage_over(i):
+            log.info("%s no market orders for %s: grid outage", self.house, block_ref.key)
+            return
         orders = []
         sell = round(self.remaining_sell.get(i, 0.0), 3)
         buy = round(self.remaining_buy.get(i, 0.0), 3)
@@ -338,6 +348,65 @@ class Runtime:
         clamp = lambda x: max(0.5, min(1.5, x))
         return clamp(rs), clamp(ru)
 
+    # --- what the street just told it: cloud, AC, guests, away, outage ------------------------
+
+    def _overlap(self, index: int, e: dict) -> float:
+        """Fraction of block `index` inside event `e` (0..1)."""
+        ref = BlockRef(day=self.day, index=index)
+        start, end = blocks.block_start(ref), blocks.block_end(ref)
+        lo, hi = max(start, e["start"]), min(end, e["end"])
+        return max(0.0, (hi - lo).total_seconds()) / (end - start).total_seconds()
+
+    def event_adjust(self, fc: Forecast) -> Forecast:
+        """The forecast with live events in it, like the hub's sim: cloud x0.3 solar, AC +1 kW,
+        guests x1.4, away x0.4 use (each weighted by how much of the block it covers)."""
+        solar, use, extra = 1.0, 1.0, 0.0
+        for e in self.sim_events:
+            if e["house"] not in (None, self.house):
+                continue
+            f = self._overlap(fc.block.index, e)
+            if f <= 0:
+                continue
+            if e["type"] == "cloud":
+                solar *= 1 - f * (1 - CLOUD_FACTOR)
+            elif e["type"] == "away":
+                use *= 1 - f * (1 - schedule.AWAY)
+            elif e["type"] == "guests":
+                use *= 1 + f * (schedule.GUESTS - 1)
+            elif e["type"] == "ac":
+                extra += AC_KW * f * config.BLOCK_MINUTES / 60
+        if solar == 1.0 and use == 1.0 and extra == 0.0:
+            return fc
+        return fc.model_copy(update={
+            "solar_p10": fc.solar_p10 * solar, "solar_p50": fc.solar_p50 * solar, "solar_p90": fc.solar_p90 * solar,
+            "use_p10": fc.use_p10 * use + extra, "use_p50": fc.use_p50 * use + extra, "use_p90": fc.use_p90 * use + extra,
+        })
+
+    def outage_over(self, index: int) -> bool:
+        """No neighbour trades for a block an outage touches (the wallet refuses them too)."""
+        return any(e["type"] == "outage" and self._overlap(index, e) > 0 for e in self.sim_events)
+
+    async def on_sim_event(self, e: dict) -> None:
+        """Re-plan every block still to trade that the event touches, straight away."""
+        if e.get("house") not in (None, self.house):
+            return
+        ev_ = {"type": e["type"], "house": e.get("house"),
+               "start": datetime.fromisoformat(e["start"]), "end": datetime.fromisoformat(e["end"])}
+        self.sim_events.append(ev_)
+        if not self.planned:
+            return
+        touched = [blocks.parse_key(k).index for k, st in self.block_states.items()
+                   if st in ("PLANNED", "OPEN") and self._overlap(blocks.parse_key(k).index, ev_) > 0]
+        if ev_["type"] != "outage":
+            for i in touched:
+                self.replan_block(i)
+        log.info("%s heard %s %s-%s: %s %d blocks", self.house, ev_["type"], f"{ev_['start']:%H:%M}",
+                 f"{ev_['end']:%H:%M}", "pausing trades for" if ev_["type"] == "outage" else "re-planned", len(touched))
+        for i in touched:
+            ref = BlockRef(day=self.day, index=i)
+            if self.block_states.get(ref.key) == "OPEN" and self.remaining_sell.get(i, 0.0) > config.MIN_TRADE_KWH:
+                asyncio.create_task(self.negotiate_sell(ref))
+
     def replan_block(self, index: int) -> None:
         """As a block opens, re-decide sell/buy for it with the forecast scaled by the last hour."""
         fc = self.forecasts.get(index)
@@ -345,6 +414,7 @@ class Runtime:
         if fc is None or mandate is None:
             return
         rs, ru = self.ratios(index)
+        fc = self.event_adjust(fc)
         adj = fc.model_copy(update={
             "solar_p10": fc.solar_p10 * rs, "solar_p50": fc.solar_p50 * rs, "solar_p90": fc.solar_p90 * rs,
             "use_p10": fc.use_p10 * ru, "use_p50": fc.use_p50 * ru, "use_p90": fc.use_p90 * ru,
@@ -369,6 +439,7 @@ class Runtime:
         self.promise_factor = 1.0
         self._negotiating_blocks.clear()
         self.collude = None
+        self.sim_events = []
 
     async def on_event(self, event: Event) -> None:
         """Handle incoming hub events from the WebSocket subscription."""
@@ -384,6 +455,9 @@ class Runtime:
         elif event.type == ev.CONSOLE_COMMAND and event.data.get("cmd") == "collude":
             self.collude = {"price": float(event.data.get("price", 5.6)), "blocks": int(event.data.get("blocks", 6))}
             log.info("%s console: collude at ₹%.2f for %d blocks", self.house, self.collude["price"], self.collude["blocks"])
+
+        elif event.type == ev.SIM_EVENT and event.data.get("event"):
+            await self.on_sim_event(event.data["event"])
 
         elif event.type == ev.METER_READING and event.house == self.house:
             self.record_reading(event.data)

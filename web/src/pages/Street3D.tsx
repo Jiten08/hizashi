@@ -13,6 +13,7 @@ import { Button, Clock, type IconName, Logo, Segmented, toast } from "../compone
 import { useHub } from "../hooks/useHub";
 import { api, blockKey, rupees } from "../lib/api";
 import { HOUSES, type Contract, type House, type HouseInfo } from "../lib/types";
+import { type Happening, TONE_CLASS, useHappening } from "../lib/happening";
 import { useHubStore } from "../store/hub";
 
 const KIT = "/models/kenney_city-kit-suburban_20/Models/GLB format/";
@@ -81,6 +82,8 @@ export default function Street3D() {
   const [quality, setQuality] = useState<Quality>(loadQuality);
   const outage = useHubStore((s) => !!s.outage);
   const flags = useHubStore((s) => s.flags);
+  const blocked = useHubStore((s) => s.blocked);
+  const { outageUntil, dayOver } = useHappening();
 
   const seenFlags = useRef(-1);
   useEffect(() => {
@@ -88,6 +91,15 @@ export default function Street3D() {
     seenFlags.current = flags.length;
     for (const f of fresh) toast(`Guard · ${f.title ?? "flag"}`, String(f.text ?? ""), "bad");
   }, [flags]);
+  const seenBlocked = useRef(-1);
+  useEffect(() => {
+    const fresh = seenBlocked.current < 0 ? [] : blocked.slice(seenBlocked.current);
+    seenBlocked.current = blocked.length;
+    for (const b of fresh) {
+      if (String(b.reason ?? "").startsWith("Grid outage")) continue;
+      toast(`Wallet refused · House ${b.house.slice(1)}`, String(b.reason ?? ""), "bad");
+    }
+  }, [blocked]);
 
   const toggleQuality = () => {
     const q = quality === "high" ? "low" : "high";
@@ -129,10 +141,11 @@ export default function Street3D() {
 
       {outage && (
         <div className="absolute left-1/2 top-24 -translate-x-1/2 rounded-full bg-alert px-4 py-2 text-sm font-semibold text-white shadow-lg">
-          Grid outage · no penalties for these blocks
+          Grid outage{outageUntil ? ` until ${outageUntil}` : ""} · no neighbour trades, no penalties
         </div>
       )}
 
+      {dayOver && <DayOver />}
       <SimPanel />
       <Stats />
 
@@ -204,6 +217,8 @@ function SimPanel() {
       <Segmented value={speed} onChange={(s) => run(`Speed ${s}×`, () => api.setSpeed(s as 1 | 60 | 300))}
         options={[1, 60, 300].map((s) => ({ value: s, label: `${s}×` }))} />
 
+      <NowList />
+
       <p className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-3">One house</p>
       <Segmented value={house} onChange={setHouse} options={HOUSES.map((h) => ({ value: h, label: h.slice(1) }))} />
       <div className="mt-2 grid grid-cols-2 gap-1.5">
@@ -237,6 +252,42 @@ function SimPanel() {
   );
 }
 
+/** What is on right now: every console button shows up here the moment the hub has it. */
+function NowList() {
+  const { all } = useHappening();
+  return (
+    <div className="mt-3 rounded-xl bg-fill/60 p-2.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-3">Now</p>
+      {all.length === 0 ? <p className="mt-1 text-[12px] text-ink-2">Nothing unusual. Normal sun and use.</p> : (
+        <ul className="mt-1.5 flex flex-wrap gap-1">
+          {all.map((x) => (
+            <li key={x.key} className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASS[x.tone]}`}>
+              {x.house ? `${x.house.slice(1)} · ` : "Street · "}{x.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** The simulated day ended at 19:00: nothing moves until the next day or a reset. */
+function DayOver() {
+  const run = async (what: string, fn: () => Promise<unknown>) => {
+    try { await fn(); toast(what, undefined, "ok"); } catch (e) { toast(what, (e as Error).message, "bad"); }
+  };
+  return (
+    <div className="absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white/95 p-5 text-center shadow-xl backdrop-blur-xl">
+      <p className="text-[17px] font-semibold">The day is over (19:00)</p>
+      <p className="mt-1 text-[13px] text-ink-2">Nothing trades at night. Start a day to try the buttons.</p>
+      <div className="mt-4 flex justify-center gap-2">
+        <Button small icon="arrow" kind="tinted" onClick={() => run("Next day", api.nextDay)}>Next day</Button>
+        <Button small icon="reset" onClick={() => run("Day reset", api.reset)}>Same day again</Button>
+      </div>
+    </div>
+  );
+}
+
 function NoWebGL() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
@@ -259,17 +310,15 @@ const Scene = memo(function Scene({ quality }: { quality: Quality }) {
   const simTime = useHubStore((s) => s.sim_time);
   const blocks = useHubStore((s) => s.blocks);
   const contracts = useHubStore((s) => s.contracts);
-  const simEvents = useHubStore((s) => s.sim_events);
   const flags = useHubStore((s) => s.flags);
+  const outage = useHubStore((s) => !!s.outage);
+  const { byHouse } = useHappening();
   const now = simTime ? Date.parse(simTime) : 0;
 
   const live = useMemo(() => {
     const delivering = Object.entries(blocks).find(([, s]) => s === "DELIVERING")?.[0];
     return delivering ? contracts.filter((c) => blockKey(c.block) === delivering) : [];
   }, [blocks, contracts]);
-  const clouded = new Set(simEvents
-    .filter((e) => e.type === "cloud" && Date.parse(e.start) <= now && Date.parse(e.end) > now)
-    .flatMap((e) => (e.house ? [e.house] : HOUSES)));
   const flagged = new Map<string, string>();
   for (const f of flags) {
     if (now - Date.parse(f.ts ?? "") <= FLAG_MINUTES * 60_000) for (const h of f.houses ?? []) flagged.set(h, String(f.title ?? "Guard flag"));
@@ -285,10 +334,10 @@ const Scene = memo(function Scene({ quality }: { quality: Quality }) {
       <Decor />
       <Transformer />
       {HOUSES.map((h) => (
-        <HouseOnStreet key={h} house={h} scale={scale} cloud={clouded.has(h)} flag={flagged.get(h)}
-          onTop={onTop} />
+        <HouseOnStreet key={h} house={h} scale={scale} cloud={byHouse[h].some((x) => x.tone === "cloud")}
+          flag={flagged.get(h)} chips={byHouse[h]} onTop={onTop} />
       ))}
-      {live.map((c) => <PowerArc key={c.contract_id} contract={c} sellerTop={tops[c.seller] ?? 2.5} buyerTop={tops[c.buyer] ?? 2.5} />)}
+      {!outage && live.map((c) => <PowerArc key={c.contract_id} contract={c} sellerTop={tops[c.seller] ?? 2.5} buyerTop={tops[c.buyer] ?? 2.5} />)}
       <OrbitControls target={[0, 1.2, 0]} autoRotate autoRotateSpeed={0.35} enablePan={false}
         minDistance={12} maxDistance={45} maxPolarAngle={1.38} />
     </>
@@ -405,7 +454,7 @@ const Transformer = memo(function Transformer() {
         <boxGeometry args={[0.7, 0.8, 0.45]} />
         <meshStandardMaterial color="#8a9099" metalness={0.5} roughness={0.4} />
       </mesh>
-      <Html position={[0, POLE_TOP + 0.5, 0]} center distanceFactor={14}>
+      <Html position={[0, POLE_TOP + 0.5, 0]} center zIndexRange={[5, 0]} distanceFactor={14}>
         <span className="rounded-md bg-[#3a3a3c] px-1.5 py-0.5 text-[11px] font-bold text-white">T1</span>
       </Html>
     </group>
@@ -426,8 +475,8 @@ function useHouseScale(): number {
   }, [gltfs]);
 }
 
-const HouseOnStreet = memo(function HouseOnStreet({ house, scale: s, cloud, flag, onTop }:
-  { house: House; scale: number; cloud: boolean; flag?: string; onTop: (house: House, y: number) => void }) {
+const HouseOnStreet = memo(function HouseOnStreet({ house, scale: s, cloud, flag, chips, onTop }:
+  { house: House; scale: number; cloud: boolean; flag?: string; chips: Happening[]; onTop: (house: House, y: number) => void }) {
   const info = useHubStore((st) => st.houses[house]);
   const live = useHubStore((st) => st.live[house]);
   const outage = useHubStore((st) => !!st.outage);
@@ -461,9 +510,11 @@ const HouseOnStreet = memo(function HouseOnStreet({ house, scale: s, cloud, flag
       <pointLight position={[0, top + 1.2, 0]} color="#ffb547" intensity={7 * glow} distance={5} decay={2} />
       {cloud && <Cloud top={top} />}
       {flag && <FlagRing />}
-      <Html position={[0, top + (cloud ? 4.2 : 1.4), 0]} center distanceFactor={16}>
+      <Html position={[0, top + (cloud ? 4.2 : 1.4), 0]} center zIndexRange={[5, 0]} distanceFactor={16}>
         <div className="pointer-events-none flex flex-col items-center gap-1 whitespace-nowrap">
-          {flag && <span className="rounded-full bg-alert px-2.5 py-1 text-[12px] font-semibold text-white shadow">{flag}</span>}
+          {chips.filter((x) => x.house !== null).map((x) => (
+            <span key={x.key} className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold shadow ${TONE_CLASS[x.tone]}`}>{x.label}</span>
+          ))}
           <span className="rounded-full bg-white/90 px-3 py-1 text-[13px] font-semibold shadow">{info?.label ?? house}</span>
           {role && (
             <span className={`rounded-full px-2.5 py-0.5 text-[12px] font-medium shadow ${net >= 0.05 ? "bg-leaf-soft text-leaf-ink" : net <= -0.05 ? "bg-sky-soft text-sky" : "bg-white/90 text-ink-2"}`}>
@@ -539,7 +590,7 @@ const PowerArc = memo(function PowerArc({ contract, sellerTop, buyerTop }: { con
           <meshBasicMaterial color="#ffc04d" toneMapped={false} />
         </mesh>
       ))}
-      <Html position={mid.toArray()} center distanceFactor={16}>
+      <Html position={mid.toArray()} center zIndexRange={[5, 0]} distanceFactor={16}>
         <span className="num whitespace-nowrap rounded-full bg-white/95 px-3 py-1 text-[13px] font-semibold text-sun-ink shadow">
           {contract.kwh.toFixed(2)} kWh · {rupees(contract.price)}
         </span>

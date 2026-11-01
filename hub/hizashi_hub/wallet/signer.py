@@ -15,6 +15,7 @@ from hizashi_shared.models import Contract, Event, Offer, PlanWindow
 
 from .. import bus
 from ..guard import watch
+from ..sim import events as sim_events
 from . import checks, keystore
 from . import mandate as mandates
 
@@ -102,6 +103,9 @@ def sign_offer_request(conn: sqlite3.Connection, house: str, token: str | None, 
     if not checks.token_ok(house, token) or house not in street:
         # Unauthenticated: answer, but don't write to the house's records or phone.
         return {"status": "refused", "reason": f"This agent isn't allowed to sign for {house}."}
+    outage = sim_events.outage_reason(offer.block)
+    if outage:
+        return _blocked(house, outage, {"offer": _dump(offer)}, now)
     mandate = mandates.current(conn, house)
     day = offer.block.day
     result = checks.check_offer(mandate, offer, block_state_fn, street, now, house=house, token=token,
@@ -140,6 +144,9 @@ def sign_contract_request(conn: sqlite3.Connection, house: str, token: str | Non
     """-> {"status": "signed", "contract"} | {"status": "refused", "reason"}. Doesn't book."""
     if not checks.token_ok(house, token) or house not in street:
         return {"status": "refused", "reason": f"This agent isn't allowed to sign for {house}."}
+    outage = sim_events.outage_reason(contract.block)
+    if outage:
+        return {"status": "refused", "reason": outage}
     mandate = mandates.current(conn, house)
     if contract.seller in street and contract.buyer in street:
         # open_access is covered by both signatures, so fix it before signing.

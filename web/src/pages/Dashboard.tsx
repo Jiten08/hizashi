@@ -11,6 +11,7 @@ import { HaggleChat } from "../components/HaggleChat";
 import { HouseSvg } from "../components/HouseSvg";
 import { Button, Card, Clock, Icon, Logo, Segmented, toast } from "../components/ui";
 import { useHub } from "../hooks/useHub";
+import { TONE_CLASS, useHappening } from "../lib/happening";
 import { useHubStore } from "../store/hub";
 import { api, blockIndex, blockKey, blockLabel, rupees } from "../lib/api";
 import { HOUSES, type House } from "../lib/types";
@@ -31,6 +32,7 @@ export default function Dashboard() {
   const shared = hub.contracts.reduce((a, c) => a + c.kwh, 0);
   const saved = HOUSES.reduce((a, h) => a + (hub.savings[h]?.saved_today ?? 0), 0);
   const outage = !!hub.outage;
+  const { outageUntil } = useHappening();
 
   const seen = useRef(-1);
   useEffect(() => {
@@ -67,7 +69,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between px-5 pt-4">
             <h2 className="text-[15px] font-semibold">The street</h2>
             <span className="text-[13px] text-ink-2">
-              {outage ? "Grid outage, no penalties for these blocks" : delivering ? `Power flowing for ${blockLabel(blockIndex(delivering))}` : "Waiting for the first block"}
+              {outage ? `Grid outage${outageUntil ? ` until ${outageUntil}` : ""} · no neighbour trades, no penalties` : delivering ? `Power flowing for ${blockLabel(blockIndex(delivering))}` : "Waiting for the first block"}
             </span>
           </div>
           <svg viewBox="0 0 1000 380" className="w-full">
@@ -81,7 +83,7 @@ export default function Dashboard() {
               <rect x="-14" y="-28" width="28" height="28" rx="6" fill="#3a3a3c" />
               <text x="0" y="-9" textAnchor="middle" fill="#fff" style={{ fontSize: 11, fontWeight: 700 }}>T1</text>
             </g>
-            {live.map((c) => {
+            {!outage && live.map((c) => {
               const a = X[HOUSES.indexOf(c.seller)], b = X[HOUSES.indexOf(c.buyer)];
               const mid = (a + b) / 2, lift = 60 + Math.abs(b - a) * 0.12;
               return (
@@ -172,6 +174,7 @@ function HouseCard({ house }: { house: House }) {
   const net = l ? l.solar_kw - l.use_kw : 0;
   const role = !l ? "—" : net >= 0.05 ? "Spare power" : net <= -0.05 ? "Needs power" : "Balanced";
   const pending = hub.approvals.some((a) => a.house === house && a.status === "pending");
+  const chips = useHappening().byHouse[house];
   return (
     <Card className="col-span-3">
       <div className="flex items-start justify-between">
@@ -183,6 +186,11 @@ function HouseCard({ house }: { house: House }) {
         </div>
         {pending && <span className="rounded-full bg-sky-soft px-2 py-0.5 text-[11px] font-semibold text-sky">asking owner</span>}
       </div>
+      {chips.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {chips.map((x) => <span key={x.key} className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASS[x.tone]}`}>{x.label}</span>)}
+        </div>
+      )}
       <div className="mt-4 flex items-end justify-between">
         <div>
           <p className={`num text-[28px] font-semibold leading-none tracking-tight ${(sv?.saved_today ?? 0) > 0 ? "text-leaf-ink" : ""}`}>{rupees(sv?.saved_today ?? 0)}</p>

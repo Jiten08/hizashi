@@ -19,6 +19,7 @@ from .. import bus
 from ..clock import SimClock
 from ..market.lifecycle import Lifecycle
 from ..market.orderbook import OrderBook
+from . import events as sim_events
 from .events import SimEvents
 from .load import LoadSim
 from .meters import Meters
@@ -51,6 +52,7 @@ class Sim:
         self.meters = Meters(self.pv, self.load, self.conn, self.events)
         self.lifecycle = Lifecycle(self.conn, self.houses, self.mandates, self.orderbook, self.events)
         self._outage = False
+        sim_events.use(self.events)
 
     def wire(self, clock: SimClock) -> None:
         clock.on_minute += [self.meters.on_minute, self.watch_outage, self.lifecycle.on_minute]
