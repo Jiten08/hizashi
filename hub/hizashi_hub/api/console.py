@@ -4,13 +4,14 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from hizashi_shared import blocks
+from hizashi_shared import blocks, config, street
 from hizashi_shared import events as ev
 from hizashi_shared.models import HOUSES, Event
 
 from .. import attacks, bus, clock, schedules
 from .. import state as hub_state
 from ..sim import weather
+from .houses import _save as save_house
 
 router = APIRouter(prefix="/console", tags=["console"])
 
@@ -21,6 +22,7 @@ class SpeedBody(BaseModel):
 
 class ResetBody(BaseModel):
     next_day: bool = False      # move to the day after (owners' schedules for it take effect)
+    start_over: bool = False    # wipe the street's history and send every phone back to onboarding
 
 
 class ConsoleEventBody(BaseModel):
@@ -40,17 +42,59 @@ def set_speed(body: SpeedBody) -> dict:
 
 @router.post("/reset")
 async def reset(request: Request, body: ResetBody | None = None) -> dict:
-    """Start the day over at 05:00, or with next_day start the following day (its own weather)."""
+    """Start the day over at 05:00, or with next_day start the following day (its own weather).
+    start_over goes back to the first demo day as if nobody had used Hizashi yet."""
     c = clock.get()
     day = None
-    if body and body.next_day:
+    if body and body.start_over:
+        day = config.SIM_DAY
+        frame, source = await weather.load_weather(day)
+        request.app.state.sim.set_weather(frame)
+        hub_state.get().weather_source = source
+        _wipe_history(request.app.state.db)
+    elif body and body.next_day:
         day = blocks.next_day(c.day)
         frame, source = await weather.load_weather(day)
         request.app.state.sim.set_weather(frame)
         hub_state.get().weather_source = source
     await c.reset(day)
     schedules.publish_all(request.app.state.db, c.now)
+    if body and body.start_over:
+        _back_to_onboarding(request, c.now)
     return {"sim_time": c.now.isoformat(), "speed": c.speed, "day": c.day}
+
+
+# Kept by "start over": houses (roofs), keys and phones' push subscriptions.
+HISTORY_TABLES = ("ledger", "mandates", "schedules")
+
+
+def _wipe_history(conn) -> None:
+    """The ledger, every rule change and every away / guests plan (the day's rows go in clock.reset)."""
+    for t in HISTORY_TABLES:
+        conn.execute(f"DELETE FROM {t}")
+    conn.commit()
+
+
+def _back_to_onboarding(request: Request, now) -> None:
+    """Default rules for every house and each one un-onboarded; phones show onboarding on the event."""
+    conn = request.app.state.db
+    hs = hub_state.get()
+    schedules.sync(conn, request.app.state.sim.events)
+    for house in hs.houses:
+        bus.publish(Event(type=ev.SCHEDULE_UPDATED, sim_time=now, house=house, data={"schedules": []}))
+    for house, m in street.load_mandates().items():
+        conn.execute("INSERT INTO mandates (house, version, json, created_at) VALUES (?, ?, ?, ?)",
+                     (house, m.version, m.model_dump_json(), now.isoformat()))
+        hs.mandates[house] = m
+        bus.publish(Event(type=ev.MANDATE_UPDATED, sim_time=now, house=house, data={"mandate": m.model_dump(mode="json")}))
+    conn.commit()
+    for house, info in list(hs.houses.items()):
+        info = info.model_copy(update={"onboarded": False})
+        hs.houses[house] = info
+        conn.execute("INSERT OR REPLACE INTO houses (id, json) VALUES (?, ?)", (house, info.model_dump_json()))
+        save_house(info)
+        bus.publish(Event(type=ev.HOUSE_UPDATED, sim_time=now, house=house, data={"house": info.model_dump(mode="json")}))
+    conn.commit()
 
 
 SIM_TYPES = ("cloud", "outage", "ac", "guests", "away")

@@ -180,3 +180,46 @@ async def test_agent_start_reads_day_mandates_and_blocks_from_the_hub(monkeypatc
     assert rt.mandates["h12"].version == 7 and rt.mandates["h12"].min_sell_price == 4.5
     assert rt.block_states == {"2026-11-01#46": "OPEN", "2026-11-01#38": "SETTLED"}
     assert selling == ["2026-11-01#46"]                     # picks up the block that's already open
+
+
+# --- start over ------------------------------------------------------------------------------------
+
+async def test_start_over_wipes_history_and_sends_houses_back_to_onboarding(conn, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from hizashi_hub import state as hub_state
+    from hizashi_hub.api import console
+    from hizashi_hub.settlement import ledger
+    from hizashi_hub.wallet import mandate as mandates
+    from hizashi_shared import config
+
+    file = tmp_path / "street.json"
+    file.write_text(config.STREET_FILE.read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setattr(config, "STREET_FILE", file)
+    defaults = street.load_mandates()
+    hs = hub_state.init(street.load_houses(), dict(defaults), 60)
+    changed = mandates.update(conn, "h12", defaults["h12"].model_copy(update={"min_sell_price": 4.9}), NOW)
+    hs.mandates["h12"] = changed
+    ledger.append(conn, NOW.isoformat(), "contract.booked", "c1", {"seller": "h12", "buyer": "h14"})
+    events = SimEvents()
+    schedules.add(conn, events, "h12", "away", DAY, "09:00", "17:00", NOW)
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db=conn, sim=SimpleNamespace(events=events))))
+
+    q = bus.subscribe()
+    try:
+        console._wipe_history(conn)
+        console._back_to_onboarding(request, NOW)
+        published = []
+        while not q.empty():
+            published.append(q.get_nowait())
+    finally:
+        bus.unsubscribe(q)
+
+    assert ledger.entries(conn) == [] and ledger.verify(conn) == {"ok": True, "entries": 0}
+    assert schedules.load(conn) == [] and events.schedules == []
+    assert mandates.current(conn, "h12") == defaults["h12"] and hs.mandates["h12"] == defaults["h12"]
+    assert not any(h.onboarded for h in hs.houses.values())
+    assert not any(h.onboarded for h in street.load_houses(file).values())
+    kinds = {(e.type, e.house) for e in published}
+    for h in hs.houses:
+        assert {(ev.HOUSE_UPDATED, h), (ev.MANDATE_UPDATED, h), (ev.SCHEDULE_UPDATED, h)} <= kinds

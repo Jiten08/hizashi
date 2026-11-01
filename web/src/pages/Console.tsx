@@ -48,6 +48,11 @@ export default function Console() {
           </div>
           <Button icon="reset" kind="danger" className="mt-4 w-full" onClick={() => run("Day reset", api.reset)}>Reset the day (same seed)</Button>
           <Button icon="arrow" className="mt-2 w-full" onClick={() => run("Next day", api.nextDay)}>Start the next day (owners' away / guests plans apply)</Button>
+          <Button icon="reset" kind="danger" className="mt-2 w-full"
+            onClick={() => confirm("Wipe the ledger, every deal, rule change and away / guests plan, and send every phone back to onboarding?")
+              && run("Started over: phones show onboarding", api.startOver)}>
+            Start over (clear history, onboard again)
+          </Button>
         </Card>
         <Card title="Street events">
           <div className="grid gap-2">
