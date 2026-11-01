@@ -115,6 +115,20 @@ export interface SetupResult {
   house: HouseInfo; clear_day_kwh: number; mandate: Mandate; tariffs: Tariffs; saved: boolean;
 }
 
+/** POST /api/wallet/{house}/mandate/parse: a proposal, not saved. */
+export interface MandateProposal {
+  mandate: Mandate;
+  changes: { field: string; label: string; from: string; to: string }[];
+  source: "gemini" | "rules" | "none";
+  note: string;
+}
+
+/** The owner is away, or has guests, from start to end (IST ISO times). */
+export interface Schedule {
+  schedule_id: string; house: House; kind: "away" | "guests"; start: string; end: string; created_at: string;
+}
+
+/** What an agent said with one of its offers (screens only). */
 export interface HubEvent<T = Record<string, any>> {
   type: string;
   sim_time: string;
@@ -146,6 +160,7 @@ export interface Snapshot {
   sim_events: SimEvent[];
   blocked: (Record<string, any> & { house: House })[];
   auctions: Record<string, Record<string, any>>;
+  schedules: Partial<Record<House, Schedule[]>>;
 }
 
 export const EV = {
@@ -163,12 +178,13 @@ export const EV = {
   MARKET_CLEARED: "market.cleared",
   SETTLEMENT_DONE: "settlement.done",
   SAVINGS_UPDATED: "savings.updated",
-  GUARD_FLAG: "guard.flag",
+  GUARD_FLAG: "guard.flag",       // {kind, title, text, houses, detail, ts}
   GRID_OUTAGE: "grid.outage",
   CONSOLE_COMMAND: "console.command",
   MANDATE_UPDATED: "mandate.updated",
   SIM_EVENT: "sim.event",
   HOUSE_UPDATED: "house.updated",
+  SCHEDULE_UPDATED: "schedule.updated",
 } as const;
 
 export type Role = "owner" | "street" | "console";

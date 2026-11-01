@@ -21,11 +21,13 @@ class HubState:
         self.mandates = mandates
         self.speed = speed
         self.weather_source: str | None = None
+        self.schedules: dict[str, list[dict]] = {}   # house -> away / guests plans (kept across days)
         self.reset()
 
     def reset(self) -> None:
         """Forget everything that happened during the simulated day."""
         self.sim_time: datetime | None = None
+        self.sun: dict | None = None                 # {azimuth, elevation} from the last tick
         self.running = False
         self.blocks: dict[str, str] = {}             # block key -> BlockState
         self.forecasts: dict[str, list[dict]] = {}   # house -> forecasts
@@ -49,9 +51,11 @@ class HubState:
             self.sim_time = e.sim_time
             self.speed = d.get("speed", self.speed)
             self.running = d.get("running", self.running)
+            self.sun = d.get("sun", self.sun)
             if d.get("reset"):
                 self.reset()
                 self.sim_time = e.sim_time
+                self.sun = d.get("sun")
         elif e.type == ev.BLOCK_STATE:
             self.blocks[d["block"]] = d["state"]
         elif e.type == ev.MANDATE_UPDATED and e.house:
@@ -87,6 +91,8 @@ class HubState:
             self.auctions[d.get("block", "")] = d
         elif e.type == ev.HOUSE_UPDATED and e.house:
             self.houses[e.house] = HouseInfo.model_validate(d["house"])
+        elif e.type == ev.SCHEDULE_UPDATED and e.house:
+            self.schedules[e.house] = d.get("schedules", [])
         elif e.type == ev.SAVINGS_UPDATED and e.house:
             self.savings[e.house] = d
         elif e.type in (ev.APPROVAL_REQUESTED, ev.APPROVAL_RESOLVED):
@@ -105,6 +111,7 @@ class HubState:
             "sim_time": self.sim_time.isoformat() if self.sim_time else None,
             "speed": self.speed,
             "running": self.running,
+            "sun": self.sun,
             "public_url": tunnel.public_url(),
             "houses": {h: info.model_dump(mode="json") for h, info in self.houses.items()},
             "mandates": {h: m.model_dump(mode="json") for h, m in self.mandates.items()},
@@ -123,6 +130,7 @@ class HubState:
             "sim_events": self.sim_events,
             "blocked": self.blocked,
             "auctions": self.auctions,
+            "schedules": self.schedules,
             "recent_events": self.recent,
         }
 

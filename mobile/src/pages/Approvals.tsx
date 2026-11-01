@@ -1,4 +1,5 @@
 import { ApprovalCard } from "../components/ApprovalCard";
+import { PushPrompt } from "../components/Notifications";
 import { Pill, Row, Screen, Section } from "../components/ui";
 import { hhmm } from "../lib/format";
 import { useHubStore } from "../lib/store";
@@ -18,6 +19,7 @@ export default function Approvals({ house }: { house: House }) {
   const done = mine.filter((a) => a.status !== "pending").reverse();
   return (
     <Screen title="Approvals">
+      <PushPrompt house={house} />
       {pending.length ? pending.map((a) => <ApprovalCard key={a.approval_id} approval={a} />) : (
         <Section footer="Buy plans over your “ask me above” limit show up here first.">
           <Row icon="check" iconBg="var(--color-green)" title="Nothing waiting for you" last />

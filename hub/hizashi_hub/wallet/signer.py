@@ -14,6 +14,8 @@ from hizashi_shared import events as ev
 from hizashi_shared.models import Contract, Event, Offer, PlanWindow
 
 from .. import bus
+from ..guard import watch
+from ..sim import events as sim_events
 from . import checks, keystore
 from . import mandate as mandates
 
@@ -84,10 +86,15 @@ def _dump(model) -> dict:
 # Refusals the owner should see as a red card: their own limits stopped the agent.
 # Check 3 (block timing) and 0 (duplicates, mismatched terms) are protocol noise; check 8
 # (plan waiting / declined) is already on the phone as the approval card.
-OWNER_CHECKS = {2, 4, 5, 6, 7}
+OWNER_CHECKS = {2, 4, 5, 6, 7, 9}
+GUARD_CHECK = 9                 # the guard refused it (replay, price-fixing)
 
 
 def _blocked(house: str, reason: str, payload: dict, now: datetime, check: int | None = None) -> dict:
+    """Refuse. Only a broken owner rule (or a guard catch) is announced to the screens and phone;
+    timing refusals (gate closed, outage, waiting for an OK) go back to the agent quietly."""
+    if check not in OWNER_CHECKS:
+        return {"status": "refused", "reason": reason}
     bus.publish(Event(type=ev.WALLET_BLOCKED, sim_time=now, house=house,
                       data={"reason": reason, "text": checks.blocked_text(reason), "check": check,
                             "owner_rule": check in OWNER_CHECKS, **payload}))
@@ -100,6 +107,9 @@ def sign_offer_request(conn: sqlite3.Connection, house: str, token: str | None, 
     if not checks.token_ok(house, token) or house not in street:
         # Unauthenticated: answer, but don't write to the house's records or phone.
         return {"status": "refused", "reason": f"This agent isn't allowed to sign for {house}."}
+    outage = sim_events.outage_reason(offer.block)
+    if outage:
+        return _blocked(house, outage, {"offer": _dump(offer)}, now)
     mandate = mandates.current(conn, house)
     day = offer.block.day
     result = checks.check_offer(mandate, offer, block_state_fn, street, now, house=house, token=token,
@@ -114,8 +124,18 @@ def sign_offer_request(conn: sqlite3.Connection, house: str, token: str | None, 
             store_offer(conn, offer, "refused", result.reason, now)
         return _blocked(house, result.reason, {"offer": _dump(offer)}, now, result.check)
 
+    guard = watch.get()
+    if guard:
+        try:
+            guard.check_ask(conn, offer, now)
+        except watch.GuardRefusal as e:
+            store_offer(conn, offer, "refused", str(e), now)
+            return _blocked(house, str(e), {"offer": _dump(offer)}, now, GUARD_CHECK)
+
     signed = sign_offer(house, offer)
     store_offer(conn, signed, "signed", None, now)
+    if guard:
+        guard.signed(signed)
     data = {"offer": _dump(signed)}
     bus.publish(Event(type=ev.NEGO_OFFER, sim_time=now, house=house, data=data))
     if signed.to:
@@ -128,6 +148,9 @@ def sign_contract_request(conn: sqlite3.Connection, house: str, token: str | Non
     """-> {"status": "signed", "contract"} | {"status": "refused", "reason"}. Doesn't book."""
     if not checks.token_ok(house, token) or house not in street:
         return {"status": "refused", "reason": f"This agent isn't allowed to sign for {house}."}
+    outage = sim_events.outage_reason(contract.block)
+    if outage:
+        return {"status": "refused", "reason": outage}
     mandate = mandates.current(conn, house)
     if contract.seller in street and contract.buyer in street:
         # open_access is covered by both signatures, so fix it before signing.

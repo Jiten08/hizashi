@@ -1,6 +1,7 @@
 // Today: saved vs BESCOM, live power rings, what needs the owner, the live block, the latest
-// haggle, today's deals. Every figure comes from the hub.
+// haggle, today's deals, and the owner's away / guests plans. Every figure comes from the hub.
 import { ApprovalCard } from "../components/ApprovalCard";
+import { HomePlans, PlanButtons } from "../components/HomePlans";
 import { Card, Icon, Pill, Ring, Row, Screen, Section } from "../components/ui";
 import { blockIndex, blockLabel, hhmm, houseName, kwh, rupees } from "../lib/format";
 import { useHubStore } from "../lib/store";
@@ -18,6 +19,7 @@ export default function Today({ house }: { house: House }) {
   const live = hub.live[house];
   const pending = hub.approvals.filter((a) => a.house === house && a.status === "pending");
   const blocked = hub.blocked.filter((b) => b.house === house && b.owner_rule !== false).slice(-1);
+  const flag = hub.flags.filter((f) => (f.houses ?? []).includes(house)).at(-1);
 
   const entries = Object.entries(hub.blocks).sort(([a], [b]) => a.localeCompare(b));
   const cur = entries.find(([, s]) => s === "DELIVERING") ?? entries.find(([, s]) => s === "OPEN") ?? entries.find(([, s]) => s !== "SETTLED") ?? entries.at(-1);
@@ -66,6 +68,8 @@ export default function Today({ house }: { house: House }) {
         </div>
       </Card>
 
+      <PlanButtons house={house} />
+
       {pending[0] && <ApprovalCard approval={pending[0]} />}
 
       {blocked.map((b, i) => (
@@ -77,6 +81,16 @@ export default function Today({ house }: { house: House }) {
           </div>
         </div>
       ))}
+
+      {flag && (
+        <div className="rise mt-3 flex gap-2.5 rounded-xl bg-red-soft p-3.5">
+          <Icon name="shield" className="h-5 w-5 shrink-0 text-red" strokeWidth={2} />
+          <div>
+            <p className="t-headline text-red">Street guard · {String(flag.title ?? "flag")}</p>
+            <p className="t-subhead mt-0.5 !text-label">{String(flag.text ?? "")}</p>
+          </div>
+        </div>
+      )}
 
       {curIndex !== null && (
         <Section header="Now">
@@ -119,6 +133,8 @@ export default function Today({ house }: { house: House }) {
           </div>
         </Section>
       )}
+
+      <HomePlans house={house} />
 
       <Section header="Today's deals" footer={deals.length ? undefined : "Deals your agent books show up here."}>
         {deals.length ? deals.map((c, i) => {

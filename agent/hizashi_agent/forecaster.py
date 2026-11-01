@@ -2,7 +2,8 @@
 
 Solar p50 = shared.solar on the hub's forecast weather; u = 0.10 + 0.40 x cloud_cover/100;
 p10 = p50 (1 - u), p90 = p50 (1 + u). Use: p50 = mean, p10 = max(mean - 1.28 sd, 0),
-p90 = mean + 1.28 sd, with Away/Guests/AC modifiers.
+p90 = mean + 1.28 sd, with Away/Guests/AC modifiers. `use_factors` (one per block, from the
+owner's away / guests schedule, hizashi_shared.schedule) scales use block by block.
 """
 from datetime import datetime
 
@@ -19,6 +20,7 @@ def forecast_day(
     weather: dict | pd.DataFrame,
     day: str | None = None,
     modifiers: dict | None = None,
+    use_factors: list[float] | None = None,
 ) -> list[Forecast]:
     """Compute generation and consumption expectations per 15-min block (96 blocks)
     using p10/p50/p90 logic.
@@ -62,6 +64,10 @@ def forecast_day(
     if mods.get("ac"):
         # AC on: +1.0 kW -> 0.25 kWh per 15-minute block
         mean_use = [m + 0.25 for m in mean_use]
+
+    if use_factors:
+        mean_use = [m * f for m, f in zip(mean_use, use_factors)]
+        std_use = [s * f for s, f in zip(std_use, use_factors)]
 
     made_at = datetime.now(tz=config.TZ)
     forecasts: list[Forecast] = []

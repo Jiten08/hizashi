@@ -79,9 +79,14 @@ AGENT_PORTS = {"h12": 9012, "h14": 9014, "h16": 9016, "h18": 9018}
 
 AGENT_TOKENS = {h: _s(f"AGENT_TOKEN_{h.upper()}", f"dev-{h}") for h in AGENT_PORTS}
 
+# Web Push (phone notifications). The VAPID key pair is made on first use in keys/vapid.pem.
+VAPID_SUBJECT = _s("VAPID_SUBJECT", "mailto:team-enthos@example.org")
+
 # Phase 3
 GEMINI_API_KEY = _s("GEMINI_API_KEY", "")
 GROQ_API_KEY = _s("GROQ_API_KEY", "")
+GEMINI_MODEL = _s("GEMINI_MODEL", "gemini-3.5-flash-lite")   # fast on the free tier (~1 s)
+LLM_PER_MINUTE = _i("LLM_PER_MINUTE", 12)                      # per process; the free tier allows ~12/min in all
 TWILIO_ACCOUNT_SID = _s("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = _s("TWILIO_AUTH_TOKEN", "")
 TWILIO_WHATSAPP_FROM = _s("TWILIO_WHATSAPP_FROM", "")

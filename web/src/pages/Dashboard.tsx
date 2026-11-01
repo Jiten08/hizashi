@@ -7,9 +7,12 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity } from "../components/Activity";
 import { ConnectSheet } from "../components/ConnectSheet";
+import { HaggleChat } from "../components/HaggleChat";
 import { HouseSvg } from "../components/HouseSvg";
 import { Button, Card, Clock, Icon, Logo, Segmented, toast } from "../components/ui";
 import { useHub } from "../hooks/useHub";
+import { TONE_CLASS, useHappening } from "../lib/happening";
+import { useHubStore } from "../store/hub";
 import { api, blockIndex, blockKey, blockLabel, rupees } from "../lib/api";
 import { HOUSES, type House } from "../lib/types";
 
@@ -29,13 +32,15 @@ export default function Dashboard() {
   const shared = hub.contracts.reduce((a, c) => a + c.kwh, 0);
   const saved = HOUSES.reduce((a, h) => a + (hub.savings[h]?.saved_today ?? 0), 0);
   const outage = !!hub.outage;
+  const { outageUntil } = useHappening();
 
-  const seen = useRef(-1);
+
+  const seenFlags = useRef(-1);
   useEffect(() => {
-    const fresh = seen.current < 0 ? [] : hub.blocked.slice(seen.current).filter((b) => b.owner_rule !== false);
-    seen.current = hub.blocked.length;
-    for (const b of fresh) toast(`House ${b.house.slice(1)}: blocked by its wallet`, String(b.reason ?? ""), "bad");
-  }, [hub.blocked.length]);
+    const fresh = seenFlags.current < 0 ? [] : hub.flags.slice(seenFlags.current);
+    seenFlags.current = hub.flags.length;
+    for (const f of fresh) toast(`Guard · ${f.title ?? "flag"}`, String(f.text ?? ""), "bad");
+  }, [hub.flags.length]);
 
   return (
     <div className="mx-auto max-w-[1440px] px-8 pb-10 pt-6">
@@ -49,6 +54,7 @@ export default function Dashboard() {
         <Segmented value={hub.speed} onChange={(s) => api.setSpeed(s as 1 | 60 | 300).catch(() => {})}
           options={SPEEDS.map((s) => ({ value: s, label: `${s}×` }))} />
         <Button icon="qr" kind="tinted" onClick={() => setConnectOpen(true)}>Connect a phone</Button>
+        <Link to="/street/3d"><Button icon="sun" kind="tinted">3D street</Button></Link>
         <Link to="/console"><Button icon="sliders">Controls</Button></Link>
       </header>
 
@@ -57,7 +63,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between px-5 pt-4">
             <h2 className="text-[15px] font-semibold">The street</h2>
             <span className="text-[13px] text-ink-2">
-              {outage ? "Grid outage, no penalties for these blocks" : delivering ? `Power flowing for ${blockLabel(blockIndex(delivering))}` : "Waiting for the first block"}
+              {outage ? `Grid outage${outageUntil ? ` until ${outageUntil}` : ""} · no neighbour trades, no penalties` : delivering ? `Power flowing for ${blockLabel(blockIndex(delivering))}` : "Waiting for the first block"}
             </span>
           </div>
           <svg viewBox="0 0 1000 380" className="w-full">
@@ -71,7 +77,7 @@ export default function Dashboard() {
               <rect x="-14" y="-28" width="28" height="28" rx="6" fill="#3a3a3c" />
               <text x="0" y="-9" textAnchor="middle" fill="#fff" style={{ fontSize: 11, fontWeight: 700 }}>T1</text>
             </g>
-            {live.map((c) => {
+            {!outage && live.map((c) => {
               const a = X[HOUSES.indexOf(c.seller)], b = X[HOUSES.indexOf(c.buyer)];
               const mid = (a + b) / 2, lift = 60 + Math.abs(b - a) * 0.12;
               return (
@@ -119,13 +125,15 @@ export default function Dashboard() {
 
         {HOUSES.map((h) => <HouseCard key={h} house={h} />)}
 
-        <Card title="Activity" className="col-span-8"><Activity events={hub.log} /></Card>
-        <Card title="Try it" className="col-span-4">
+        <Card title="Activity" className="col-span-5"><Activity events={hub.log} /></Card>
+        <Card title="A2A haggle" className="col-span-4"><HaggleChat /></Card>
+        <Card title="Try it" className="col-span-3">
           <div className="grid gap-2">
             <Button icon="cloud" onClick={() => run("Cloud over House 12", () => api.consoleEvent("cloud", "h12", 45))}>Cloud over House 12 (45 min)</Button>
             <Button icon="bolt" onClick={() => run("AC on at House 14", () => api.consoleEvent("ac", "h14", 120))}>AC on at House 14 (2 h)</Button>
             <Button icon="plug" onClick={() => run("Grid outage", () => api.consoleEvent("outage", undefined, 30))}>Grid outage (30 min)</Button>
-            <Button icon="ban" kind="danger" onClick={() => run("House 14 tries a ₹40 bid", () => api.consoleEvent("bad_bid", "h14"))}>House 14 tries a ₹40 bid</Button>
+            <Button icon="check" kind="tinted" onClick={() => run("Asking House 14's owner (check the phone)", () => api.consoleEvent("ask_owner", "h14"))}>Ask House 14's owner for a big buy</Button>
+            <Button icon="ban" kind="danger" onClick={() => run("Outsider “House 20” tries to sell at ₹40", () => api.consoleEvent("impostor"))}>Outsider “House 20” sells at ₹40</Button>
             <Button icon="reset" onClick={() => run("Day reset", api.reset)}>Reset the day</Button>
           </div>
         </Card>
@@ -154,13 +162,14 @@ function Big({ value, label, tone = "" }: { value: string; label: string; tone?:
 }
 
 function HouseCard({ house }: { house: House }) {
-  const hub = useHub("street");
+  const hub = useHubStore();      // the page's useHub owns the socket
   const info = hub.houses[house];
   const l = hub.live[house];
   const sv = hub.savings[house];
   const net = l ? l.solar_kw - l.use_kw : 0;
   const role = !l ? "—" : net >= 0.05 ? "Spare power" : net <= -0.05 ? "Needs power" : "Balanced";
   const pending = hub.approvals.some((a) => a.house === house && a.status === "pending");
+  const chips = useHappening().byHouse[house];
   return (
     <Card className="col-span-3">
       <div className="flex items-start justify-between">
@@ -172,6 +181,11 @@ function HouseCard({ house }: { house: House }) {
         </div>
         {pending && <span className="rounded-full bg-sky-soft px-2 py-0.5 text-[11px] font-semibold text-sky">asking owner</span>}
       </div>
+      {chips.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {chips.map((x) => <span key={x.key} className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASS[x.tone]}`}>{x.label}</span>)}
+        </div>
+      )}
       <div className="mt-4 flex items-end justify-between">
         <div>
           <p className={`num text-[28px] font-semibold leading-none tracking-tight ${(sv?.saved_today ?? 0) > 0 ? "text-leaf-ink" : ""}`}>{rupees(sv?.saved_today ?? 0)}</p>

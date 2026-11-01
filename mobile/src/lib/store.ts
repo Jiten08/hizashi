@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { api, wsUrl } from "./api";
+import { closeNotification } from "./push";
 import { EV, type House, type HubEvent, type Snapshot } from "./types";
 
 export interface HubState extends Snapshot {
@@ -17,7 +18,7 @@ const empty: Snapshot = {
   houses: {} as Snapshot["houses"], mandates: {} as Snapshot["mandates"],
   blocks: {}, forecasts: {}, plans: {}, negotiations: {}, contracts: [], settlements: [],
   savings: {}, approvals: [], flags: [], outage: null, weather_source: null, recent_events: [],
-  live: {}, sim_events: [], blocked: [], auctions: {},
+  live: {}, sim_events: [], blocked: [], auctions: {}, schedules: {},
 };
 
 const DAY_RESET: Partial<HubState> = {
@@ -65,6 +66,8 @@ const reducers: Record<string, Reducer> = {
   [EV.SIM_EVENT]: (s, e) => ({ sim_events: [...s.sim_events, e.data.event] }),
   [EV.MANDATE_UPDATED]: (s, e) => (e.house ? { mandates: { ...s.mandates, [e.house]: e.data.mandate } } : {}),
   [EV.HOUSE_UPDATED]: (s, e) => (e.house ? { houses: { ...s.houses, [e.house]: e.data.house } } : {}),
+  [EV.GUARD_FLAG]: (s, e) => ({ flags: [...s.flags, e.data] }),
+  [EV.SCHEDULE_UPDATED]: (s, e) => (e.house ? { schedules: { ...s.schedules, [e.house]: e.data.schedules } } : {}),
 };
 
 function upsertApproval(s: HubState, e: HubEvent): Partial<HubState> {
@@ -110,6 +113,7 @@ export function useHubConnection(house: House | null) {
         const e = JSON.parse(m.data) as HubEvent;
         const patch = reducers[e.type]?.(useHubStore.getState(), e);
         if (patch) set(patch);
+        if (e.type === EV.APPROVAL_RESOLVED && e.data.approval) closeNotification(e.data.approval.approval_id);
         if (e.type === EV.CLOCK_TICK && e.data.reset) api.state().then((s) => set({ ...empty, ...s, loaded: true })).catch(() => {});
       };
       ws.onclose = () => retry();

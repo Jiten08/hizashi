@@ -115,6 +115,7 @@ export interface SetupResult {
   house: HouseInfo; clear_day_kwh: number; mandate: Mandate; tariffs: Tariffs; saved: boolean;
 }
 
+/** What an agent said with one of its offers (screens only). */
 export interface HubEvent<T = Record<string, any>> {
   type: string;
   sim_time: string;
@@ -146,6 +147,7 @@ export interface Snapshot {
   sim_events: SimEvent[];
   blocked: (Record<string, any> & { house: House })[];
   auctions: Record<string, Record<string, any>>;
+  sun: { azimuth: number; elevation: number } | null;
 }
 
 export const EV = {

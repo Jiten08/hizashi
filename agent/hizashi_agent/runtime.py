@@ -1,9 +1,9 @@
 """Main loop reacting to block states (section 7.6).
 
-PLANNED: forecast the day, post plan windows. OPEN: sellers start negotiations, buyers
+PLANNED: forecast the day (with the owner's away / guests schedule), post plan windows. OPEN: sellers start negotiations, buyers
 answer. GATE_CLOSED: post leftover kWh as a signed market order at the limit price.
 DELIVERING: read own meter. SETTLED: read results; after a shortfall shrink promises 10%.
-Console command bad_bid (h14): bid at ₹40 for the next OPEN block (the wallet refuses it).
+Console events (cloud / AC / guests / away / outage) re-plan the blocks they touch at once.
 """
 from __future__ import annotations
 
@@ -14,11 +14,14 @@ import uuid
 
 import httpx
 
-from hizashi_shared import blocks, config, events as ev, profiles, solar, street
-from hizashi_shared.models import BlockRef, Contract, Event, Forecast, HouseInfo, Mandate, Offer
+from hizashi_shared import blocks, config, events as ev, profiles, schedule, solar, street
+from hizashi_shared.models import BlockRef, Contract, Event, Forecast, HouseInfo, Mandate, Offer, Schedule
 from . import forecaster, negotiator, planner
 from .a2a_client import negotiate_sale
 from .hub_client import HubClient
+
+CLOUD_FACTOR = schedule.CLOUD_FACTOR
+AC_KW = schedule.AC_KW
 
 log = logging.getLogger("hizashi.agent.runtime")
 
@@ -40,6 +43,9 @@ class Runtime:
         self.promise_factor = 1.0          # shrinks 10% after each shortfall
         self.forecasts: dict[int, Forecast] = {}
         self.actual: dict[int, dict[str, float]] = {}   # block -> metered solar/use kWh so far
+        self.schedules: list[Schedule] = []             # the owner's away / guests plans
+        self.sim_events: list[dict] = []                # console cloud / ac / guests / away / outage it has heard of
+
 
         # Load initial street & mandates synchronously from local data
         try:
@@ -59,12 +65,15 @@ class Runtime:
 
         try:
             state = await self.hub.get_state()
-            if "mandates" in state:
-                self.mandates = {m["house"]: Mandate.model_validate(m) for m in state["mandates"]}
-            if "block_states" in state:
-                self.block_states = state["block_states"]
-        except Exception:
-            pass
+            if state.get("sim_time"):         # the console may have moved on to a later day
+                self.current_sim_time = datetime.fromisoformat(state["sim_time"])
+                self.day = self.current_sim_time.date().isoformat()
+            # GET /api/state: mandates by house, block states under "blocks" (block key -> state)
+            for h, m in (state.get("mandates") or {}).items():
+                self.mandates[h] = Mandate.model_validate(m)
+            self.block_states = dict(state.get("blocks") or {})
+        except Exception as e:
+            log.warning("%s couldn't read the hub's state (%s); starting from local data", self.house, e)
 
         # If day is already running and tradable blocks are active, forecast and plan
         if not self.planned:
@@ -78,7 +87,15 @@ class Runtime:
                 if rem > config.MIN_TRADE_KWH:
                     asyncio.create_task(self.negotiate_sell(b_ref))
 
-    def fallback_forecast(self, house_info: HouseInfo, day: str) -> list[Forecast]:
+    async def load_schedules(self) -> list[float]:
+        """Per-block use factors for today from the owner's schedule (1.0 if the hub can't say)."""
+        try:
+            self.schedules = [Schedule.model_validate(s) for s in await self.hub.get_schedules()]
+        except Exception as e:
+            log.warning("%s couldn't fetch schedules (%s)", self.house, e)
+        return schedule.use_factors(self.schedules, self.day)
+
+    def fallback_forecast(self, house_info: HouseInfo, day: str, use_factors: list[float] | None = None) -> list[Forecast]:
         """Fallback forecast: profile mean +/- 1.28 sd; solar from the clear-sky roof model, p10/p90 at -/+15%."""
         log.info("%s using fallback forecast", self.house)
         try:
@@ -99,8 +116,9 @@ class Runtime:
             s_p10 = round(s_p50 * 0.85, 4)
             s_p90 = round(s_p50 * 1.15, 4)
 
-            m_i = means[i]
-            s_i = stds[i]
+            f = use_factors[i] if use_factors else 1.0
+            m_i = means[i] * f
+            s_i = stds[i] * f
             use_p50 = round(m_i, 4)
             use_p10 = round(max(0.0, m_i - 1.28 * s_i), 4)
             use_p90 = round(m_i + 1.28 * s_i, 4)
@@ -127,14 +145,15 @@ class Runtime:
         if not me_info or not mandate:
             return
 
+        factors = await self.load_schedules()
         forecasts: list[Forecast]
         try:
-            weather_data = await self.hub.get_weather()
+            weather_data = await self.hub.get_weather(self.day)
             df = solar.weather_frame(weather_data)        # needs the 15-min DatetimeIndex
-            forecasts = forecaster.forecast_day(me_info, df, self.day)
+            forecasts = forecaster.forecast_day(me_info, df, self.day, use_factors=factors)
         except Exception as e:
             log.warning("%s forecaster failed (%s)", self.house, e)
-            forecasts = self.fallback_forecast(me_info, self.day)
+            forecasts = self.fallback_forecast(me_info, self.day, factors)
 
         self.forecasts = {f.block.index: f for f in forecasts}
         intents = planner.plan_day(forecasts, mandate)
@@ -166,6 +185,9 @@ class Runtime:
             return
         rem = self.remaining_sell.get(block_ref.index, 0.0)
         if rem <= config.MIN_TRADE_KWH:
+            return
+        if self.outage_over(block_ref.index):
+            log.info("%s not selling %s: grid outage", self.house, block_ref.key)
             return
         self._negotiating_blocks.add(block_ref.key)
 
@@ -237,6 +259,9 @@ class Runtime:
         if not me or not mandate:
             return
         i = block_ref.index
+        if self.outage_over(i):
+            log.info("%s no market orders for %s: grid outage", self.house, block_ref.key)
+            return
         orders = []
         sell = round(self.remaining_sell.get(i, 0.0), 3)
         buy = round(self.remaining_buy.get(i, 0.0), 3)
@@ -255,26 +280,6 @@ class Runtime:
             res = await self.hub.post_order(Offer.model_validate(signed["offer"]))
             log.info("%s market %s %.3f kWh @ ₹%.2f for %s: %s %s", self.house, side, kwh, price,
                      block_ref.key, res.get("status"), res.get("reason") or "")
-
-    # --- console attack demo --------------------------------------------------------------
-
-    async def bad_bid(self, price: float = 40.0) -> dict:
-        """Bid far above the owner's max for the next OPEN block; the wallet must refuse it."""
-        open_blocks = sorted(blocks.parse_key(k).index for k, s in self.block_states.items() if s == "OPEN")
-        if not open_blocks:
-            log.info("%s bad_bid: no OPEN block", self.house)
-            return {"status": "skipped"}
-        ref = BlockRef(day=self.day, index=open_blocks[0])
-        mandate = self.mandates.get(self.house)
-        sellers = [h for h in street.neighbours(self.houses, self.house,
-                                                same_transformer=not mandate or mandate.counterparties == "same_transformer")
-                   if h.roof is not None]
-        offer = Offer(offer_id=str(uuid.uuid4()), negotiation_id=str(uuid.uuid4()), block=ref, side="bid",
-                      house=self.house, to=sellers[0].id if sellers else None, kwh=0.5, price=price,  # type: ignore[arg-type]
-                      round=0, expires_at=blocks.gate_close(ref), nonce=str(uuid.uuid4()))
-        res = await self.hub.sign_offer(offer)
-        log.info("%s bad_bid ₹%.2f for %s -> %s: %s", self.house, price, ref.key, res.get("status"), res.get("reason"))
-        return res
 
     def after_settlement(self, s: dict) -> None:
         if s.get("seller") == self.house and float(s.get("shortfall_kwh") or 0) > 0:
@@ -313,6 +318,65 @@ class Runtime:
         clamp = lambda x: max(0.5, min(1.5, x))
         return clamp(rs), clamp(ru)
 
+    # --- what the street just told it: cloud, AC, guests, away, outage ------------------------
+
+    def _overlap(self, index: int, e: dict) -> float:
+        """Fraction of block `index` inside event `e` (0..1)."""
+        ref = BlockRef(day=self.day, index=index)
+        start, end = blocks.block_start(ref), blocks.block_end(ref)
+        lo, hi = max(start, e["start"]), min(end, e["end"])
+        return max(0.0, (hi - lo).total_seconds()) / (end - start).total_seconds()
+
+    def event_adjust(self, fc: Forecast) -> Forecast:
+        """The forecast with live events in it, like the hub's sim: cloud x0.3 solar, AC +1 kW,
+        guests x1.4, away x0.4 use (each weighted by how much of the block it covers)."""
+        solar, use, extra = 1.0, 1.0, 0.0
+        for e in self.sim_events:
+            if e["house"] not in (None, self.house):
+                continue
+            f = self._overlap(fc.block.index, e)
+            if f <= 0:
+                continue
+            if e["type"] == "cloud":
+                solar *= 1 - f * (1 - CLOUD_FACTOR)
+            elif e["type"] == "away":
+                use *= 1 - f * (1 - schedule.AWAY)
+            elif e["type"] == "guests":
+                use *= 1 + f * (schedule.GUESTS - 1)
+            elif e["type"] == "ac":
+                extra += AC_KW * f * config.BLOCK_MINUTES / 60
+        if solar == 1.0 and use == 1.0 and extra == 0.0:
+            return fc
+        return fc.model_copy(update={
+            "solar_p10": fc.solar_p10 * solar, "solar_p50": fc.solar_p50 * solar, "solar_p90": fc.solar_p90 * solar,
+            "use_p10": fc.use_p10 * use + extra, "use_p50": fc.use_p50 * use + extra, "use_p90": fc.use_p90 * use + extra,
+        })
+
+    def outage_over(self, index: int) -> bool:
+        """No neighbour trades for a block an outage touches (the wallet refuses them too)."""
+        return any(e["type"] == "outage" and self._overlap(index, e) > 0 for e in self.sim_events)
+
+    async def on_sim_event(self, e: dict) -> None:
+        """Re-plan every block still to trade that the event touches, straight away."""
+        if e.get("house") not in (None, self.house):
+            return
+        ev_ = {"type": e["type"], "house": e.get("house"),
+               "start": datetime.fromisoformat(e["start"]), "end": datetime.fromisoformat(e["end"])}
+        self.sim_events.append(ev_)
+        if not self.planned:
+            return
+        touched = [blocks.parse_key(k).index for k, st in self.block_states.items()
+                   if st in ("PLANNED", "OPEN") and self._overlap(blocks.parse_key(k).index, ev_) > 0]
+        if ev_["type"] != "outage":
+            for i in touched:
+                self.replan_block(i)
+        log.info("%s heard %s %s-%s: %s %d blocks", self.house, ev_["type"], f"{ev_['start']:%H:%M}",
+                 f"{ev_['end']:%H:%M}", "pausing trades for" if ev_["type"] == "outage" else "re-planned", len(touched))
+        for i in touched:
+            ref = BlockRef(day=self.day, index=i)
+            if self.block_states.get(ref.key) == "OPEN" and self.remaining_sell.get(i, 0.0) > config.MIN_TRADE_KWH:
+                asyncio.create_task(self.negotiate_sell(ref))
+
     def replan_block(self, index: int) -> None:
         """As a block opens, re-decide sell/buy for it with the forecast scaled by the last hour."""
         fc = self.forecasts.get(index)
@@ -320,6 +384,7 @@ class Runtime:
         if fc is None or mandate is None:
             return
         rs, ru = self.ratios(index)
+        fc = self.event_adjust(fc)
         adj = fc.model_copy(update={
             "solar_p10": fc.solar_p10 * rs, "solar_p50": fc.solar_p50 * rs, "solar_p90": fc.solar_p90 * rs,
             "use_p10": fc.use_p10 * ru, "use_p50": fc.use_p50 * ru, "use_p90": fc.use_p90 * ru,
@@ -343,16 +408,18 @@ class Runtime:
         self.planned = False
         self.promise_factor = 1.0
         self._negotiating_blocks.clear()
+        self.sim_events = []
 
     async def on_event(self, event: Event) -> None:
         """Handle incoming hub events from the WebSocket subscription."""
         if event.type == ev.CLOCK_TICK:
             self.current_sim_time = event.sim_time
             if event.data.get("reset"):
+                self.day = event.data.get("day") or event.sim_time.date().isoformat()
                 self.reset_day()
 
-        elif event.type == ev.CONSOLE_COMMAND and event.data.get("cmd") == "bad_bid":
-            await self.bad_bid(float(event.data.get("price", 40)))
+        elif event.type == ev.SIM_EVENT and event.data.get("event"):
+            await self.on_sim_event(event.data["event"])
 
         elif event.type == ev.METER_READING and event.house == self.house:
             self.record_reading(event.data)
@@ -362,6 +429,11 @@ class Runtime:
 
         elif event.type == ev.MANDATE_UPDATED and event.house:
             self.mandates[event.house] = Mandate.model_validate(event.data["mandate"])
+
+        elif event.type == ev.SCHEDULE_UPDATED and event.house == self.house:
+            # Away / guests changed: re-forecast; blocks already past PLANNED keep their deals.
+            if self.planned:
+                await self.forecast_and_plan()
 
         elif event.type == ev.HOUSE_UPDATED and event.house:
             self.houses[event.house] = HouseInfo.model_validate(event.data["house"])

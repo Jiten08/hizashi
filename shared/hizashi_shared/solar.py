@@ -230,3 +230,10 @@ async def fetch_google_weather(day: str) -> pd.DataFrame:
     df_res["temp_air"] = df_res["temp_air"].round(2)
 
     return df_res[["ghi", "dni", "dhi", "temp_air", "cloud_cover"]]
+
+
+def sun_position(when) -> dict:
+    """{"azimuth", "elevation"} in degrees for one moment (pvlib azimuth: 180 = south).
+    The clock sends it with every tick so the 3D street's sun matches the roofs' output."""
+    sp = _location.get_solarposition(pd.DatetimeIndex([when]))
+    return {"azimuth": round(float(sp["azimuth"].iloc[0]), 2), "elevation": round(float(sp["apparent_elevation"].iloc[0]), 2)}

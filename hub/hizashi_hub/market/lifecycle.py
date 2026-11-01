@@ -75,6 +75,13 @@ class Lifecycle:
 
     def run_auction(self, ref: BlockRef, now: datetime) -> list[Contract]:
         asks, bids = self.orderbook.close(ref.key)
+        if self.events.outage_in(ref):
+            # No neighbour trades during an outage: every order goes back unfilled.
+            bus.publish(Event(type=ev.MARKET_CLEARED, sim_time=now, data={
+                "block": ref.key, "index": ref.index, "orders": len(asks) + len(bids), "matches": [], "outage": True,
+                "unsold": [{"house": o.house, "kwh": round(o.kwh, 3)} for o in asks],
+                "unmet": [{"house": o.house, "kwh": round(o.kwh, 3)} for o in bids]}))
+            return []
         booked: list[Contract] = []
         left_asks, left_bids = [], []
         for tf in sorted({h.transformer for h in self.houses.values()}):

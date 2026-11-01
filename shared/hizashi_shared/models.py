@@ -148,6 +148,15 @@ class Approval(BaseModel):
     created_at: datetime
 
 
+class Schedule(BaseModel):          # the owner is away, or has guests, from start to end
+    schedule_id: str
+    house: House
+    kind: Literal["away", "guests"]
+    start: datetime
+    end: datetime
+    created_at: datetime
+
+
 class Event(BaseModel):
     type: str
     sim_time: datetime

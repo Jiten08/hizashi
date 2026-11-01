@@ -1,6 +1,7 @@
 """Simulated clock: one tick = one simulated minute, real sleep = 60 / speed seconds.
 
-The day runs 05:00 -> 19:00 and then stops (console can reset; same seed -> same day).
+The day runs 05:00 -> 19:00 and then stops (console can reset; same seed -> same day, or
+move on to the next date).
 Each tick publishes `clock.tick` and a `block.state` event for every tradable block
 whose lifecycle state changed (section 6.2).
 
@@ -13,7 +14,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 
-from hizashi_shared import blocks, config
+from hizashi_shared import blocks, config, solar
 from hizashi_shared import events as ev
 from hizashi_shared.models import BlockRef, Event
 
@@ -62,8 +63,9 @@ class SimClock:
         self._wake.set()        # cut the current sleep short
         self._publish_tick()
 
-    async def reset(self) -> None:
+    async def reset(self, day: str | None = None) -> None:
         await self.stop()
+        self.day = day or self.day
         self.now = blocks.day_start(self.day)
         self.block_states = {}
         for hook in self.on_reset:
@@ -107,6 +109,8 @@ class SimClock:
             "speed": self.speed,
             "running": self.running and not self.finished,
             "block": blocks.block_of(self.now).key,
+            "day": self.day,
+            "sun": solar.sun_position(self.now),
         }
         if reset:
             data["reset"] = True

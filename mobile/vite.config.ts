@@ -32,6 +32,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        importScripts: ["push-sw.js"],      // public/push-sw.js: approval notifications (Web Push)
         navigateFallback: "/app/index.html",
         navigateFallbackAllowlist: [/^\/app\//],
         navigateFallbackDenylist: [/^\/api/, /^\/ws/],

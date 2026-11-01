@@ -9,6 +9,7 @@ dependencies = [
   "python-dotenv>=1.0", "websockets>=12",
   "tzdata>=2024.1",                 # Windows has no system time-zone database for Asia/Kolkata
   "twilio>=9", "google-genai>=1.0", "groq>=0.11",
+  "pywebpush>=2.0",                 # approval notifications to the phone app
 ]
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "honcho>=2"]
