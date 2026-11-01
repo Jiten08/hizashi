@@ -18,12 +18,12 @@ const empty: Snapshot = {
   houses: {} as Snapshot["houses"], mandates: {} as Snapshot["mandates"],
   blocks: {}, forecasts: {}, plans: {}, negotiations: {}, contracts: [], settlements: [],
   savings: {}, approvals: [], flags: [], outage: null, weather_source: null, recent_events: [],
-  live: {}, sim_events: [], blocked: [], auctions: {}, schedules: {}, notes: {},
+  live: {}, sim_events: [], blocked: [], auctions: {}, schedules: {},
 };
 
 const DAY_RESET: Partial<HubState> = {
   blocks: {}, contracts: [], settlements: [], negotiations: {}, approvals: [], flags: [], blocked: [],
-  savings: {}, plans: {}, live: {}, sim_events: [], auctions: {}, outage: null, notes: {},
+  savings: {}, plans: {}, live: {}, sim_events: [], auctions: {}, outage: null,
 };
 
 type Reducer = (s: HubState, e: HubEvent) => Partial<HubState>;
@@ -66,7 +66,6 @@ const reducers: Record<string, Reducer> = {
   [EV.SIM_EVENT]: (s, e) => ({ sim_events: [...s.sim_events, e.data.event] }),
   [EV.MANDATE_UPDATED]: (s, e) => (e.house ? { mandates: { ...s.mandates, [e.house]: e.data.mandate } } : {}),
   [EV.HOUSE_UPDATED]: (s, e) => (e.house ? { houses: { ...s.houses, [e.house]: e.data.house } } : {}),
-  [EV.NEGO_NOTE]: (s, e) => (e.data.note ? { notes: { ...s.notes, [e.data.note.offer_id]: e.data.note } } : {}),
   [EV.GUARD_FLAG]: (s, e) => ({ flags: [...s.flags, e.data] }),
   [EV.SCHEDULE_UPDATED]: (s, e) => (e.house ? { schedules: { ...s.schedules, [e.house]: e.data.schedules } } : {}),
 };

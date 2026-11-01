@@ -116,11 +116,6 @@ export interface SetupResult {
 }
 
 /** What an agent said with one of its offers (screens only). */
-export interface NegoNote {
-  offer_id: string; negotiation_id: string; house: House; to: House | null; side: "ask" | "bid";
-  price: number; round: number; text: string; source: "gemini" | "template";
-}
-
 export interface HubEvent<T = Record<string, any>> {
   type: string;
   sim_time: string;
@@ -152,7 +147,6 @@ export interface Snapshot {
   sim_events: SimEvent[];
   blocked: (Record<string, any> & { house: House })[];
   auctions: Record<string, Record<string, any>>;
-  notes: Record<string, NegoNote>;
   sun: { azimuth: number; elevation: number } | null;
 }
 
@@ -177,7 +171,6 @@ export const EV = {
   MANDATE_UPDATED: "mandate.updated",
   SIM_EVENT: "sim.event",
   HOUSE_UPDATED: "house.updated",
-  NEGO_NOTE: "nego.note",
 } as const;
 
 export type Role = "owner" | "street" | "console";

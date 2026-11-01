@@ -87,7 +87,6 @@ GEMINI_API_KEY = _s("GEMINI_API_KEY", "")
 GROQ_API_KEY = _s("GROQ_API_KEY", "")
 GEMINI_MODEL = _s("GEMINI_MODEL", "gemini-3.5-flash-lite")   # fast on the free tier (~1 s)
 LLM_PER_MINUTE = _i("LLM_PER_MINUTE", 12)                      # per process; the free tier allows ~12/min in all
-LLM_VOICE_HOUSES = tuple(h for h in _s("LLM_VOICE_HOUSES", "h12,h14").split(",") if h)   # agents that talk
 TWILIO_ACCOUNT_SID = _s("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = _s("TWILIO_AUTH_TOKEN", "")
 TWILIO_WHATSAPP_FROM = _s("TWILIO_WHATSAPP_FROM", "")

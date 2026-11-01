@@ -130,7 +130,7 @@ export default function Dashboard() {
         {HOUSES.map((h) => <HouseCard key={h} house={h} />)}
 
         <Card title="Activity" className="col-span-5"><Activity events={hub.log} /></Card>
-        <Card title="Agents haggling" className="col-span-4"><HaggleChat /></Card>
+        <Card title="A2A haggle" className="col-span-4"><HaggleChat /></Card>
         <Card title="Try it" className="col-span-3">
           <div className="grid gap-2">
             <Button icon="cloud" onClick={() => run("Cloud over House 12", () => api.consoleEvent("cloud", "h12", 45))}>Cloud over House 12 (45 min)</Button>

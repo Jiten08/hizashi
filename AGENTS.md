@@ -1,6 +1,6 @@
 # Hizashi — rules for every coding agent
 
-Hizashi is Team Enthos's Kodikon 6.0 build. Karnataka's KERC P2P Regulations 2024 let a home with rooftop solar sell spare power to a neighbour at an agreed price, but each 15-minute block needs a promise made an hour ahead, with penalties if a cloud breaks it. Hizashi gives **every home an agent** that forecasts, promises safely and **haggles with neighbours' agents over A2A**, inside limits the owner sets. A **Mandate Wallet** in the hub holds each home's signing key and refuses anything outside the owner's limits. The hub runs the market, settles each block under KERC 8(g), keeps a hash-chained ledger and shows each owner **"saved vs BESCOM"**. Demo: one laptop, a simulated street of 4 houses (h12, h14, h16, h18), two phones. The LLM (Gemini) turns the owner's sentence into proposed wallet rules and writes the agents' one-line haggle messages; prices, trading and every check are plain Python, and everything works without it.
+Hizashi is Team Enthos's Kodikon 6.0 build. Karnataka's KERC P2P Regulations 2024 let a home with rooftop solar sell spare power to a neighbour at an agreed price, but each 15-minute block needs a promise made an hour ahead, with penalties if a cloud breaks it. Hizashi gives **every home an agent** that forecasts, promises safely and **haggles with neighbours' agents over A2A**, inside limits the owner sets. A **Mandate Wallet** in the hub holds each home's signing key and refuses anything outside the owner's limits. The hub runs the market, settles each block under KERC 8(g), keeps a hash-chained ledger and shows each owner **"saved vs BESCOM"**. Demo: one laptop, a simulated street of 4 houses (h12, h14, h16, h18), two phones. The LLM (Gemini) turns the owner's sentence into proposed wallet rules; haggling, prices, trading and every check are plain Python, and everything works without it.
 
 Full spec: `docs/BUILD_SPEC.md`. Task list: `docs/TASKS.md`.
 
@@ -32,7 +32,7 @@ honcho start                      # hub :8000 + agents :9012 :9014 :9016 :9018
 - Hub: `uvicorn hizashi_hub.app:app --port 8000`. One agent: `python -m hizashi_agent --house h12 --port 9012`.
 - Dashboard dev (desktop demo only): `cd web && npm run dev` (http://localhost:5173, proxies `/api` and `/ws` to :8000).
 - Phone app (owner, one house): a PWA in `mobile/`, built to `mobile/dist` and served by the hub at `/app/`. Dev: `cd mobile && npm run dev` (http://localhost:5174/app/).
-- Phones open `<hub>/app/?house=h14` (the dashboard's QR codes). The hub's address is the laptop's LAN IP, or `ngrok http 8000` across networks (the hub detects it).
+- Phones open `<hub>/app/?house=h14` (the dashboard's QR codes). The hub starts `ngrok http 8000` itself when ngrok is installed (`AUTO_NGROK=0` to skip), else uses the laptop's LAN IP.
 
 ## Test
 

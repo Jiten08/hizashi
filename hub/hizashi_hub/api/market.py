@@ -1,15 +1,12 @@
 """/api/market/...: book haggled contracts, post market orders for the gate-closure auction."""
-from typing import Literal
-
 from fastapi import APIRouter, Body, Header, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from hizashi_shared import crypto
-from hizashi_shared import events as ev
-from hizashi_shared.models import Contract, Event, Offer
+from hizashi_shared.models import Contract, Offer
 
-from .. import bus, clock
+from .. import clock
 from .. import state as hub_state
 from ..market import booking
 from ..market.orderbook import OrderBookClosed
@@ -36,31 +33,6 @@ async def book_contract(request: Request, body: dict = Body(...), authorization:
     except booking.BookingError as e:
         return {"status": "refused", "reason": str(e)}
     return {"status": "booked", "contract": booked.model_dump(mode="json")}
-
-
-class NoteBody(BaseModel):
-    offer_id: str
-    negotiation_id: str
-    house: str
-    to: str | None = None
-    side: Literal["ask", "bid"]
-    price: float
-    round: int
-    text: str
-    source: Literal["gemini", "template"] = "template"
-
-
-@router.post("/notes")
-async def post_note(body: NoteBody, authorization: str | None = Header(None)):
-    """What an agent said with one of its offers (screens only; never part of a trade)."""
-    if not checks.token_ok(body.house, bearer(authorization)):
-        return JSONResponse({"status": "refused", "reason": "Only the house's own agent can speak for it."}, 401)
-    data = {"note": {**body.model_dump(), "text": body.text.strip()[:200]}}
-    now = clock.get().now
-    bus.publish(Event(type=ev.NEGO_NOTE, sim_time=now, house=body.house, data=data))  # type: ignore[arg-type]
-    if body.to:
-        bus.publish(Event(type=ev.NEGO_NOTE, sim_time=now, house=body.to, data=data))  # type: ignore[arg-type]
-    return {"status": "ok"}
 
 
 @router.post("/orders")

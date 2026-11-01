@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Resp
 from hizashi_shared import config, street
 from hizashi_shared.models import Mandate
 
-from . import clock, db, schedules, state, ws
+from . import clock, db, schedules, state, tunnel, ws
 from .guard import watch
 from .notify import webpush
 from .sim import weather
@@ -67,11 +67,13 @@ async def lifespan(app: FastAPI):
     tasks.append(asyncio.create_task(webpush.run(conn), name="webpush"))
     tasks.append(asyncio.create_task(watch.init(hub_state.houses).run(conn), name="guard"))
     sim_clock.start()
+    tunnel.start_ngrok()
     log.info("hub up: day %s at %sx, %d houses", config.SIM_DAY, config.SIM_SPEED, len(houses))
     try:
         yield
     finally:
         await sim_clock.stop()
+        tunnel.stop_ngrok()
         for t in tasks:
             t.cancel()
         conn.close()

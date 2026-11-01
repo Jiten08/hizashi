@@ -44,7 +44,6 @@ class HubState:
         self.sim_events: list[dict] = []             # console cloud / ac / guests / away / outage
         self.blocked: list[dict] = []                # wallet refusals, newest last
         self.auctions: dict[str, dict] = {}          # block key -> market.cleared data
-        self.notes: dict[str, dict] = {}             # offer_id -> what its agent said
 
     def apply(self, e: Event) -> None:
         d = e.data
@@ -88,11 +87,6 @@ class HubState:
             self.sim_events.append(d.get("event", {}))
         elif e.type == ev.WALLET_BLOCKED:
             self.blocked = (self.blocked + [{"house": e.house, "sim_time": e.sim_time.isoformat(), **d}])[-50:]
-        elif e.type == ev.NEGO_NOTE:
-            n = d.get("note", {})
-            self.notes[n.get("offer_id", "")] = n
-            if len(self.notes) > 600:
-                self.notes.pop(next(iter(self.notes)))
         elif e.type == ev.MARKET_CLEARED:
             self.auctions[d.get("block", "")] = d
         elif e.type == ev.HOUSE_UPDATED and e.house:
@@ -137,7 +131,6 @@ class HubState:
             "blocked": self.blocked,
             "auctions": self.auctions,
             "schedules": self.schedules,
-            "notes": self.notes,
             "recent_events": self.recent,
         }
 

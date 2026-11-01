@@ -18,15 +18,15 @@ cd mobile && npm install && npm run build && cd ..     # owner phone app (PWA)
 Run the demo:
 
 ```bash
-python -X utf8 -m honcho start          # hub :8000 + the four house agents
-ngrok http 8000                         # only if phones are on another network (the hub detects the URL)
+python -X utf8 -m honcho start          # hub :8000 + the four house agents (+ an ngrok tunnel, see below)
 ```
 
 - **Laptop:** http://localhost:8000/ is the street dashboard; `/console` has every control.
 - **Phones:** on the dashboard click **Connect a phone** and scan a house with the phone's camera. It opens
   `…/app/?house=h14` in the browser. Add it to the Home Screen for a full-screen app. Any number of phones.
-- Same Wi-Fi as the laptop? No ngrok needed (allow Python through Windows Firewall on private networks).
-  Public Wi-Fi that isolates devices? Use ngrok; the first visit shows ngrok's notice once, tap **Visit Site**.
+- The hub starts `ngrok http 8000` itself when ngrok is installed, so the QR codes work from any network
+  (the first visit shows ngrok's notice once, tap **Visit Site**). `AUTO_NGROK=0` in `.env` turns it off;
+  the QR codes then use the laptop's Wi-Fi address (allow Python through Windows Firewall on private networks).
 - **Notifications** (Rules → Notifications, or the card on Approvals): the phone is pinged when its agent
   needs an OK, even locked, with Approve / Decline on Android. Browsers allow this only over https, so open
   the app through the ngrok link; on iPhone add it to the Home Screen first. The hub needs internet to reach

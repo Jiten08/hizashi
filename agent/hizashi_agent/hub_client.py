@@ -13,12 +13,9 @@ from hizashi_shared import config
 from hizashi_shared import events as ev
 from hizashi_shared.models import Contract, Event, Offer, PlanWindow
 
-from . import voice
-
 log = logging.getLogger("hizashi.agent.hub")
 
 Handler = Callable[[Event], Awaitable[None]]
-ContextFn = Callable[[Offer], dict]
 BACKOFF_MAX = 10.0
 
 
@@ -29,8 +26,6 @@ class HubClient:
         self.token = token or config.AGENT_TOKENS.get(house, f"dev-{house}")
         self.handlers: list[Handler] = []
         self.connected = False
-        self.context_fn: ContextFn | None = None     # the runtime's view of a block, for voice lines
-        self._voice_tasks: set[asyncio.Task] = set()
 
     @property
     def is_mock(self) -> bool:
@@ -122,24 +117,7 @@ class HubClient:
             except Exception as e:
                 log.warning("%s sign_offer error: %s", self.house, e)
                 return {"status": "refused", "reason": str(e)}
-        if res.get("status") == "signed" and offer.negotiation_id and not offer.negotiation_id.startswith("market-"):
-            # Say something with the offer, without holding up the haggle.
-            t = asyncio.create_task(self._say(offer))
-            self._voice_tasks.add(t)
-            t.add_done_callback(self._voice_tasks.discard)
         return res
-
-    async def _say(self, offer: Offer) -> None:
-        try:
-            ctx = self.context_fn(offer) if self.context_fn else {}
-            text, source = await voice.line(offer, ctx)
-            async with httpx.AsyncClient(timeout=5) as http:
-                await http.post(f"{self.hub_url}/api/market/notes", headers=self._auth, json={
-                    "offer_id": offer.offer_id, "negotiation_id": offer.negotiation_id, "house": offer.house,
-                    "to": offer.to, "side": offer.side, "price": offer.price, "round": offer.round,
-                    "text": text, "source": source})
-        except Exception as e:
-            log.info("%s voice line skipped: %s", self.house, e)
 
     async def sign_contract(self, contract: Contract) -> dict:
         """POST /api/wallet/{house}/sign {"kind": "contract"} -> signed | refused."""
