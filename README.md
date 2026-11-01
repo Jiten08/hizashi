@@ -1,6 +1,6 @@
 # Hizashi
 
-Every home with rooftop solar gets an AI agent that forecasts surplus, promises safely, and haggles with neighbours over peer-to-peer power trades — all inside limits the owner sets. Built by Team Enthos for Kodikon 6.0.
+Every home with rooftop solar AND NO solar gets an AI agent that forecasts surplus, promises safely, and haggles with neighbours over peer-to-peer power trades — all inside limits the owner sets. Built by Team Enthos for Kodikon 6.0.
 
 ---
 
