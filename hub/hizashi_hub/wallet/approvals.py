@@ -150,6 +150,16 @@ def store_plans(conn: sqlite3.Connection, house: str, windows: list[PlanWindow],
     return saved
 
 
+def save_pending_plan(conn: sqlite3.Connection, window: PlanWindow, now: datetime) -> Approval:
+    """Add one plan window that waits for the owner, ask them, and tell the screens."""
+    w = signer.sign_plan(window.house, window.model_copy(update={"status": "pending"}))
+    _save_plan(conn, w)
+    conn.commit()
+    a = request_plan(conn, w, now)
+    publish_plans(conn, w.house, w.day, now)
+    return a
+
+
 def request_plan(conn: sqlite3.Connection, window: PlanWindow, now: datetime) -> Approval:
     return _create(conn, window.house, "plan", window.plan_id, plan_summary(window), now)
 

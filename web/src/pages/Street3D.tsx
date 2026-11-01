@@ -82,7 +82,6 @@ export default function Street3D() {
   const [quality, setQuality] = useState<Quality>(loadQuality);
   const outage = useHubStore((s) => !!s.outage);
   const flags = useHubStore((s) => s.flags);
-  const blocked = useHubStore((s) => s.blocked);
   const { outageUntil, dayOver } = useHappening();
 
   const seenFlags = useRef(-1);
@@ -91,15 +90,6 @@ export default function Street3D() {
     seenFlags.current = flags.length;
     for (const f of fresh) toast(`Guard · ${f.title ?? "flag"}`, String(f.text ?? ""), "bad");
   }, [flags]);
-  const seenBlocked = useRef(-1);
-  useEffect(() => {
-    const fresh = seenBlocked.current < 0 ? [] : blocked.slice(seenBlocked.current);
-    seenBlocked.current = blocked.length;
-    for (const b of fresh) {
-      if (String(b.reason ?? "").startsWith("Grid outage")) continue;
-      toast(`Wallet refused · House ${b.house.slice(1)}`, String(b.reason ?? ""), "bad");
-    }
-  }, [blocked]);
 
   const toggleQuality = () => {
     const q = quality === "high" ? "low" : "high";
@@ -110,7 +100,7 @@ export default function Street3D() {
   return (
     <div className="fixed inset-0 bg-[#cfe3f5]">
       <HubConnection />
-      <div className={`absolute inset-0 transition-[filter] duration-700 ${outage ? "grayscale-[0.75] brightness-[0.55]" : ""}`}>
+      <div className={`absolute inset-0 isolate transition-[filter] duration-700 ${outage ? "grayscale-[0.75] brightness-[0.55]" : ""}`}>
         {webglOk() ? (
           <Fallback>
             <Canvas shadows={quality === "high"} dpr={quality === "high" ? [1, 1.5] : 1}
@@ -182,7 +172,7 @@ function Stat({ value, label, tone = "" }: { value: string; label: string; tone?
 
 // --- simulate panel ------------------------------------------------------------------------------------
 
-const PER_HOUSE: { type: string; label: string; icon: IconName; minutes: number; solarOnly?: boolean }[] = [
+const PER_HOUSE: { type: string; label: string; icon: IconName; minutes?: number; solarOnly?: boolean }[] = [
   { type: "cloud", label: "Cloud", icon: "cloud", minutes: 45, solarOnly: true },
   { type: "ac", label: "AC on", icon: "bolt", minutes: 120 },
   { type: "guests", label: "Guests", icon: "people", minutes: 180 },
@@ -229,6 +219,10 @@ function SimPanel() {
           </Button>
         ))}
       </div>
+      <Button small icon="check" kind="tinted" className="mt-1.5 w-full"
+        onClick={() => run(`Asking ${name(house)}'s owner (check the phone)`, () => api.consoleEvent("ask_owner", house))}>
+        Ask the owner for a big buy
+      </Button>
 
       <p className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-3">Whole street</p>
       <div className="grid grid-cols-2 gap-1.5">
@@ -236,12 +230,11 @@ function SimPanel() {
         <Button small icon="plug" onClick={() => run("Grid outage · 30 min", () => api.consoleEvent("outage", undefined, 30))}>Outage</Button>
       </div>
 
-      <p className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-3">Attacks</p>
-      <div className="grid gap-1.5">
-        <Button small icon="ban" kind="danger" onClick={() => run("House 14 tries a ₹40 bid", () => api.consoleEvent("bad_bid", "h14"))}>House 14 tries a ₹40 bid</Button>
-        <Button small icon="ban" kind="danger" onClick={() => run("Forged ask sent to House 14", () => api.consoleEvent("rogue_seller", "h14"))}>Fake “House 16” at ₹3.20</Button>
-        <Button small icon="ban" kind="danger" onClick={() => run("House 16 + 18 start fixing ₹5.60", () => api.consoleEvent("collusion"))}>16 + 18 fix ₹5.60</Button>
-      </div>
+      <p className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-3">Attack</p>
+      <Button small icon="ban" kind="danger" className="w-full"
+        onClick={() => run("Impostor “House 16” tries to sell at ₹40", () => api.consoleEvent("impostor"))}>
+        Impostor “House 16” sells at ₹40
+      </Button>
 
       <p className="mb-1.5 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-3">Day</p>
       <div className="grid grid-cols-2 gap-1.5">
@@ -312,7 +305,7 @@ const Scene = memo(function Scene({ quality }: { quality: Quality }) {
   const contracts = useHubStore((s) => s.contracts);
   const flags = useHubStore((s) => s.flags);
   const outage = useHubStore((s) => !!s.outage);
-  const { byHouse } = useHappening();
+  const { byHouse, impostor } = useHappening();
   const now = simTime ? Date.parse(simTime) : 0;
 
   const live = useMemo(() => {
@@ -337,6 +330,7 @@ const Scene = memo(function Scene({ quality }: { quality: Quality }) {
         <HouseOnStreet key={h} house={h} scale={scale} cloud={byHouse[h].some((x) => x.tone === "cloud")}
           flag={flagged.get(h)} chips={byHouse[h]} onTop={onTop} />
       ))}
+      {impostor && <Impostor claimed={impostor.claimed} price={impostor.price} />}
       {!outage && live.map((c) => <PowerArc key={c.contract_id} contract={c} sellerTop={tops[c.seller] ?? 2.5} buyerTop={tops[c.buyer] ?? 2.5} />)}
       <OrbitControls target={[0, 1.2, 0]} autoRotate autoRotateSpeed={0.35} enablePan={false}
         minDistance={12} maxDistance={45} maxPolarAngle={1.38} />
@@ -561,6 +555,38 @@ function FlagRing() {
       <ringGeometry args={[2.4, 2.75, 48]} />
       <meshBasicMaterial color="#ff3b30" transparent opacity={0.85} toneMapped={false} depthWrite={false} />
     </mesh>
+  );
+}
+
+/** The impostor that tried to enter the market: a red ghost at the street's entrance, turned away. */
+function Impostor({ claimed, price }: { claimed: string; price: number }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(({ clock }) => { if (ref.current) ref.current.position.y = 0.15 + Math.sin(clock.elapsedTime * 2) * 0.1; });
+  return (
+    <group position={[-15.5, 0, 0]}>
+      <group ref={ref}>
+        <mesh position={[0, 0.9, 0]}>
+          <boxGeometry args={[1.6, 1.6, 1.6]} />
+          <meshStandardMaterial color="#ff3b30" transparent opacity={0.45} depthWrite={false} />
+        </mesh>
+        <mesh position={[0, 2.05, 0]} rotation-y={Math.PI / 4}>
+          <coneGeometry args={[1.35, 0.9, 4]} />
+          <meshStandardMaterial color="#ff3b30" transparent opacity={0.45} depthWrite={false} />
+        </mesh>
+      </group>
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0.03, 0]}>
+        <ringGeometry args={[1.6, 1.9, 40]} />
+        <meshBasicMaterial color="#ff3b30" toneMapped={false} depthWrite={false} />
+      </mesh>
+      <Html position={[0, 3.3, 0]} center zIndexRange={[5, 0]} distanceFactor={16}>
+        <div className="pointer-events-none flex flex-col items-center gap-1 whitespace-nowrap">
+          <span className="rounded-full bg-alert px-3 py-1 text-[13px] font-semibold text-white shadow">✗ Blacklisted</span>
+          <span className="rounded-full bg-white/90 px-2.5 py-0.5 text-[12px] font-medium text-ink shadow">
+            Fake “House {claimed.slice(1)}” · ask ₹{price.toFixed(2)} · wrong signature
+          </span>
+        </div>
+      </Html>
+    </group>
   );
 }
 

@@ -1,7 +1,7 @@
 // Today: saved vs BESCOM, live power rings, what needs the owner, the live block, the latest
 // haggle, today's deals, and the owner's away / guests plans. Every figure comes from the hub.
 import { ApprovalCard } from "../components/ApprovalCard";
-import { HomePlans } from "../components/HomePlans";
+import { HomePlans, PlanButtons } from "../components/HomePlans";
 import { Card, Icon, Pill, Ring, Row, Screen, Section } from "../components/ui";
 import { blockIndex, blockLabel, hhmm, houseName, kwh, rupees } from "../lib/format";
 import { useHubStore } from "../lib/store";
@@ -67,6 +67,8 @@ export default function Today({ house }: { house: House }) {
           </p>
         </div>
       </Card>
+
+      <PlanButtons house={house} />
 
       {pending[0] && <ApprovalCard approval={pending[0]} />}
 

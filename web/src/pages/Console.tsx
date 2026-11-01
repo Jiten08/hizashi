@@ -1,5 +1,5 @@
-// /console: every demo control — speed, reset, street and per-house events, the attacks
-// (₹40 bid, forged seller, price-fixing), ledger verify — plus the raw event log.
+// /console: every demo control — speed, reset, street and per-house events, asking an owner for a
+// big buy, the impostor attack, ledger verify — plus the raw event log.
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { EventLog } from "../components/EventLog";
@@ -60,13 +60,16 @@ export default function Console() {
             <Button icon="plug" onClick={() => ev("outage", undefined, 30)}>Grid outage · 30 min</Button>
           </div>
         </Card>
-        <Card title="Attacks">
+        <Card title="Owner's OK and the attack">
           <div className="grid gap-2">
-            <Button icon="ban" kind="danger" onClick={() => ev("bad_bid", "h14")}>House 14 tries a ₹40 bid</Button>
-            <Button icon="ban" kind="danger" onClick={() => run("Forged ask sent to House 14", () => api.consoleEvent("rogue_seller", "h14"))}>Fake “House 16” offers House 14 ₹3.20</Button>
-            <Button icon="ban" kind="danger" onClick={() => run("House 16 + 18 start fixing ₹5.60", () => api.consoleEvent("collusion"))}>House 16 and 18 fix their price at ₹5.60</Button>
+            {HOUSES.map((h) => (
+              <Button key={h} icon="check" kind="tinted" onClick={() => run(`Asking House ${h.slice(1)}'s owner (check the phone)`, () => api.consoleEvent("ask_owner", h))}>
+                Ask House {h.slice(1)}'s owner for a big buy
+              </Button>
+            ))}
+            <Button icon="ban" kind="danger" onClick={() => run("Impostor “House 16” tries to sell at ₹40", () => api.consoleEvent("impostor"))}>Impostor “House 16” sells at ₹40</Button>
           </div>
-          <p className="mt-3 text-[12px] text-ink-2">Price-fixing needs both roofs selling (mid-morning to early afternoon); the guard flags it after 4 blocks.</p>
+          <p className="mt-3 text-[12px] text-ink-2">The owner's phone gets Approve / Decline; the street shows the answer. The impostor is blacklisted the moment it enters the market (its signature isn't House 16's).</p>
         </Card>
         <Card title="Ledger">
           <p className="text-sm text-ink-2">Re-hash every entry from the first; an edited row breaks the chain.</p>

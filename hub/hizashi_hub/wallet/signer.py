@@ -91,6 +91,10 @@ GUARD_CHECK = 9                 # the guard refused it (replay, price-fixing)
 
 
 def _blocked(house: str, reason: str, payload: dict, now: datetime, check: int | None = None) -> dict:
+    """Refuse. Only a broken owner rule (or a guard catch) is announced to the screens and phone;
+    timing refusals (gate closed, outage, waiting for an OK) go back to the agent quietly."""
+    if check not in OWNER_CHECKS:
+        return {"status": "refused", "reason": reason}
     bus.publish(Event(type=ev.WALLET_BLOCKED, sim_time=now, house=house,
                       data={"reason": reason, "text": checks.blocked_text(reason), "check": check,
                             "owner_rule": check in OWNER_CHECKS, **payload}))

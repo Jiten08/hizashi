@@ -38,7 +38,7 @@ def test_wallet_and_booking_refuse_trades_in_an_outage(conn, events, street_even
     street_events.add("outage", None, AT(11, 50), 30)
     r = signer.sign_offer_request(conn, "h14", "dev-h14", bid(), open_only, STREET, AT(10, 30))
     assert r["status"] == "refused" and r["reason"].startswith("Grid outage")
-    assert any(e.type == "wallet.blocked" for e in events())
+    assert not any(e.type == "wallet.blocked" for e in events())      # quiet: it's timing, not the owner's rules
     with pytest.raises(booking.BookingError, match="Grid outage"):
         booking.book(conn, type("C", (), {"contract_id": "c9", "block": BlockRef(day=DAY, index=48)})(),
                      STREET, open_only, AT(10, 30))

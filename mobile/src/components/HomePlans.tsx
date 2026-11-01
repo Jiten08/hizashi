@@ -25,6 +25,36 @@ function span(s: Schedule) {
   return `${hhmm(s.start)}–${end}`;
 }
 
+const nowQuarterOf = (simTime: string) =>
+  Math.floor((Date.parse(simTime) - Date.parse(`${simTime.slice(0, 10)}T00:00:00+05:30`)) / 900_000);
+
+/** Two big buttons near the top of Today: "I'll be away" / "Guests coming", straight into the planner. */
+export function PlanButtons({ house }: { house: House }) {
+  const simTime = useHubStore((s) => s.sim_time);
+  const [adding, setAdding] = useState<Kind | null>(null);
+  if (!simTime) return null;
+  return (
+    <>
+      <div className="mt-3 grid grid-cols-2 gap-2.5">
+        {(["away", "guests"] as Kind[]).map((k) => (
+          <button key={k} onClick={() => setAdding(k)}
+            className="flex items-center gap-2.5 rounded-xl bg-white p-3.5 text-left active:opacity-60">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] text-white" style={{ background: KIND[k].color }}>
+              <Icon name={KIND[k].icon} className="h-5 w-5" strokeWidth={2} />
+            </span>
+            <span>
+              <span className="t-headline block">{k === "away" ? "I'll be away" : "Guests coming"}</span>
+              <span className="t-footnote">Today or tomorrow</span>
+            </span>
+          </button>
+        ))}
+      </div>
+      {adding && <AddPlan house={house} today={simTime.slice(0, 10)} nowQuarter={nowQuarterOf(simTime)} initial={adding}
+        onClose={() => setAdding(null)} />}
+    </>
+  );
+}
+
 export function HomePlans({ house }: { house: House }) {
   const simTime = useHubStore((s) => s.sim_time);
   const all = useHubStore((s) => s.schedules[house]);
@@ -67,8 +97,9 @@ export function HomePlans({ house }: { house: House }) {
   );
 }
 
-function AddPlan({ house, today, nowQuarter, onClose }: { house: House; today: string; nowQuarter: number; onClose: () => void }) {
-  const [kind, setKind] = useState<Kind>("away");
+function AddPlan({ house, today, nowQuarter, onClose, initial = "away" }:
+  { house: House; today: string; nowQuarter: number; onClose: () => void; initial?: Kind }) {
+  const [kind, setKind] = useState<Kind>(initial);
   const [when, setWhen] = useState<When>(nowQuarter >= 23 * 4 ? "tomorrow" : "today");
   const first = when === "today" ? nowQuarter : 0;
   const defaults = (k: Kind, w: When) => {
@@ -76,7 +107,7 @@ function AddPlan({ house, today, nowQuarter, onClose }: { house: House; today: s
     const start = Math.max(KIND[k].start, lo);
     return { start, end: Math.max(KIND[k].end, Math.min(start + 4, 96)) };
   };
-  const [range, setRange] = useState(() => defaults("away", when));
+  const [range, setRange] = useState(() => defaults(initial, when));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

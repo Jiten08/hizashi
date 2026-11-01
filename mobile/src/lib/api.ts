@@ -35,6 +35,8 @@ export const api = {
   pushSubscribe: (house: House, sub: PushSubscriptionJSON) => req<{ status: string }>("POST", `/api/push/${house}`, sub),
   pushUnsubscribe: (house: House, endpoint: string) => req<{ status: string }>("DELETE", `/api/push/${house}`, { endpoint }),
   pushTest: (house: House) => req<{ sent: number }>("POST", `/api/push/${house}/test`),
+  testApproval: (house: House, delay = 10) =>
+    req<{ status: string; delay: number; subscribed: number }>("POST", `/api/push/${house}/test-approval`, { delay }),
 };
 
 export function wsUrl(house: House): string {

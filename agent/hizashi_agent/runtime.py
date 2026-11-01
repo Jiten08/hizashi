@@ -3,9 +3,7 @@
 PLANNED: forecast the day (with the owner's away / guests schedule), post plan windows. OPEN: sellers start negotiations, buyers
 answer. GATE_CLOSED: post leftover kWh as a signed market order at the limit price.
 DELIVERING: read own meter. SETTLED: read results; after a shortfall shrink promises 10%.
-Console command bad_bid (h14): bid at ₹40 for the next OPEN block (the wallet refuses it).
-Console command collude (h16 + h18): hold one agreed ask for the next few blocks; the guard
-catches the pattern (KERC 5(a)(ii)) and the wallet stops signing it.
+Console events (cloud / AC / guests / away / outage) re-plan the blocks they touch at once.
 """
 from __future__ import annotations
 
@@ -46,7 +44,6 @@ class Runtime:
         self.forecasts: dict[int, Forecast] = {}
         self.actual: dict[int, dict[str, float]] = {}   # block -> metered solar/use kWh so far
         self.schedules: list[Schedule] = []             # the owner's away / guests plans
-        self.collude: dict | None = None                # {"price", "blocks"} while the collusion demo runs
         self.sim_events: list[dict] = []                # console cloud / ac / guests / away / outage it has heard of
 
 
@@ -200,12 +197,6 @@ class Runtime:
             return
 
         s_limit = negotiator.seller_limit(my_mandate.min_sell_price, me_info.buyback_rate)
-        fixed = None
-        if self.collude and self.collude["blocks"] > 0:
-            fixed = s_limit = float(self.collude["price"])
-            self.collude["blocks"] -= 1
-            log.info("%s colluding: holding ₹%.2f for %s (%d more blocks)", self.house, fixed, block_ref.key,
-                     self.collude["blocks"])
         same_tf = my_mandate.counterparties == "same_transformer"
         candidates = street.neighbours(self.houses, self.house, same_transformer=same_tf)
 
@@ -222,7 +213,7 @@ class Runtime:
                         log.info("%s reached T - 70m for %s, stopping haggle", self.house, block_ref.key)
                         break
 
-                ask_0 = fixed if fixed is not None else negotiator.ask_price(0, s_limit)
+                ask_0 = negotiator.ask_price(0, s_limit)
                 expires_at = blocks.gate_close(block_ref)
                 nego_id = str(uuid.uuid4())
 
@@ -254,7 +245,6 @@ class Runtime:
                     seller_limit=s_limit,
                     remaining_kwh=current_rem,
                     http=http,
-                    fixed_price=fixed,
                 )
                 if contract:
                     self.remaining_sell[block_ref.index] = max(
@@ -290,26 +280,6 @@ class Runtime:
             res = await self.hub.post_order(Offer.model_validate(signed["offer"]))
             log.info("%s market %s %.3f kWh @ ₹%.2f for %s: %s %s", self.house, side, kwh, price,
                      block_ref.key, res.get("status"), res.get("reason") or "")
-
-    # --- console attack demo --------------------------------------------------------------
-
-    async def bad_bid(self, price: float = 40.0) -> dict:
-        """Bid far above the owner's max for the next OPEN block; the wallet must refuse it."""
-        open_blocks = sorted(blocks.parse_key(k).index for k, s in self.block_states.items() if s == "OPEN")
-        if not open_blocks:
-            log.info("%s bad_bid: no OPEN block", self.house)
-            return {"status": "skipped"}
-        ref = BlockRef(day=self.day, index=open_blocks[0])
-        mandate = self.mandates.get(self.house)
-        sellers = [h for h in street.neighbours(self.houses, self.house,
-                                                same_transformer=not mandate or mandate.counterparties == "same_transformer")
-                   if h.roof is not None]
-        offer = Offer(offer_id=str(uuid.uuid4()), negotiation_id=str(uuid.uuid4()), block=ref, side="bid",
-                      house=self.house, to=sellers[0].id if sellers else None, kwh=0.5, price=price,  # type: ignore[arg-type]
-                      round=0, expires_at=blocks.gate_close(ref), nonce=str(uuid.uuid4()))
-        res = await self.hub.sign_offer(offer)
-        log.info("%s bad_bid ₹%.2f for %s -> %s: %s", self.house, price, ref.key, res.get("status"), res.get("reason"))
-        return res
 
     def after_settlement(self, s: dict) -> None:
         if s.get("seller") == self.house and float(s.get("shortfall_kwh") or 0) > 0:
@@ -438,7 +408,6 @@ class Runtime:
         self.planned = False
         self.promise_factor = 1.0
         self._negotiating_blocks.clear()
-        self.collude = None
         self.sim_events = []
 
     async def on_event(self, event: Event) -> None:
@@ -448,13 +417,6 @@ class Runtime:
             if event.data.get("reset"):
                 self.day = event.data.get("day") or event.sim_time.date().isoformat()
                 self.reset_day()
-
-        elif event.type == ev.CONSOLE_COMMAND and event.data.get("cmd") == "bad_bid":
-            await self.bad_bid(float(event.data.get("price", 40)))
-
-        elif event.type == ev.CONSOLE_COMMAND and event.data.get("cmd") == "collude":
-            self.collude = {"price": float(event.data.get("price", 5.6)), "blocks": int(event.data.get("blocks", 6))}
-            log.info("%s console: collude at ₹%.2f for %d blocks", self.house, self.collude["price"], self.collude["blocks"])
 
         elif event.type == ev.SIM_EVENT and event.data.get("event"):
             await self.on_sim_event(event.data["event"])

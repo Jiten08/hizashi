@@ -90,7 +90,7 @@ def test_plan_flow_pending_then_approved(conn, events):
     # While pending, the wallet refuses bids in that window.
     r = signer.sign_offer_request(conn, "h14", "dev-h14", bid(), open_only, STREET, NOW)
     assert r["status"] == "refused" and "Waiting for your OK on the 10:00–13:00" in r["reason"]
-    assert [e.data["text"] for e in events() if e.type == "wallet.blocked"][0].startswith("BLOCKED · Waiting")
+    assert not [e for e in events() if e.type == "wallet.blocked"]      # waiting isn't announced
 
     approvals.resolve(conn, a["approval_id"], "approve", "app", NOW)
     assert [w.status for w in approvals.plans_for(conn, "h14", DAY)] == ["auto", "approved"]

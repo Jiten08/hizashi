@@ -1,4 +1,6 @@
 """/api/push: Web Push subscriptions for the phone app (approval notifications)."""
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
@@ -57,3 +59,29 @@ async def test(request: Request, house: str) -> dict:
         "title": "Hizashi", "body": "Notifications work. Your agent will ask here when it needs your OK.",
         "tag": "test", "url": f"/app/?house={house}"})
     return {"sent": sent}
+
+
+_pending: set[asyncio.Task] = set()
+
+
+class TestApprovalBody(BaseModel):
+    delay: int = 10                     # seconds, so the owner can lock the phone first
+
+
+@router.post("/{house}/test-approval")
+async def test_approval(request: Request, house: str, body: TestApprovalBody | None = None) -> dict:
+    """After `delay` s, ask this house's owner for a real OK (a buy plan over their no-ask limit), so the
+    phone gets the "Needs your OK" notification with Approve / Decline, locked or not."""
+    from .console import ask_owner     # console imports this package's routers; import late
+    conn = request.app.state.db
+    subscribed = len(webpush.subscriptions(conn, _house(house)))
+    delay = max(0, min((body or TestApprovalBody()).delay, 60))
+
+    async def later() -> None:
+        await asyncio.sleep(delay)
+        ask_owner(conn, house, clock.get().now)
+
+    task = asyncio.create_task(later())
+    _pending.add(task)                  # keep a reference until it has run
+    task.add_done_callback(_pending.discard)
+    return {"status": "scheduled", "delay": delay, "subscribed": subscribed}

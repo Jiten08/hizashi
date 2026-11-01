@@ -10,7 +10,7 @@ import logging
 import sqlite3
 from datetime import datetime
 
-from hizashi_shared import blocks
+from hizashi_shared import blocks, crypto
 from hizashi_shared import events as ev
 from hizashi_shared.models import Contract, Event, HouseInfo, MeterReading, Offer
 
@@ -26,6 +26,7 @@ TITLES = {
     "wash_trade": "Wash trade refused",
     "collusion": "Price-fixing caught",
     "replay": "Replay refused",
+    "impostor": "Impostor blacklisted",
 }
 
 
@@ -36,6 +37,7 @@ class GuardRefusal(Exception):
 class Guard:
     def __init__(self, houses: dict[str, HouseInfo]) -> None:
         self.houses = houses                 # live dict (onboarding can change a roof)
+        self.blacklist: dict[str, dict] = {}  # signing key -> who it pretended to be (kept across days)
         self.reset()
 
     def reset(self) -> None:
@@ -62,6 +64,28 @@ class Guard:
         bus.publish(Event(type=ev.GUARD_FLAG, sim_time=now, data=data))
         log.warning("guard: %s: %s", kind, text)
         return data
+
+    # --- sellers entering the market -------------------------------------------------------
+
+    def screen_seller(self, conn: sqlite3.Connection, offer: Offer, presented_key: str | None,
+                      now: datetime) -> str | None:
+        """None if the order really comes from the house it names. Otherwise a refusal: a key the guard
+        has blacklisted bounces at once; a signature that isn't the house's registered wallet gets the
+        sender's key blacklisted and one street-wide flag (the real house isn't blamed)."""
+        name = f"House {offer.house[1:]}"
+        if presented_key and presented_key in self.blacklist:
+            return f"Blacklisted: this key already pretended to be {self.blacklist[presented_key]['claimed']}."
+        info = self.houses.get(offer.house)
+        if info is not None and crypto.verify(offer, offer.signature, info.wallet_pubkey or ""):
+            return None
+        reason = (f"A seller claiming to be {name} offered {offer.kwh:.2f} kWh at ₹{offer.price:.2f}, but the "
+                  f"signature isn't {name}'s wallet. Blacklisted on entry; nothing traded.")
+        if presented_key:
+            self.blacklist[presented_key] = {"claimed": name, "ts": now.isoformat()}
+        self.flag(conn, "impostor", [], reason, now,
+                  {"claimed": offer.house, "price": offer.price, "kwh": offer.kwh, "key": presented_key},
+                  once=(presented_key or offer.offer_id,))
+        return reason
 
     # --- offers (wallet, before signing) ----------------------------------------------------
 

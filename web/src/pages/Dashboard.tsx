@@ -34,12 +34,6 @@ export default function Dashboard() {
   const outage = !!hub.outage;
   const { outageUntil } = useHappening();
 
-  const seen = useRef(-1);
-  useEffect(() => {
-    const fresh = seen.current < 0 ? [] : hub.blocked.slice(seen.current).filter((b) => b.owner_rule !== false);
-    seen.current = hub.blocked.length;
-    for (const b of fresh) toast(`House ${b.house.slice(1)}: blocked by its wallet`, String(b.reason ?? ""), "bad");
-  }, [hub.blocked.length]);
 
   const seenFlags = useRef(-1);
   useEffect(() => {
@@ -138,7 +132,8 @@ export default function Dashboard() {
             <Button icon="cloud" onClick={() => run("Cloud over House 12", () => api.consoleEvent("cloud", "h12", 45))}>Cloud over House 12 (45 min)</Button>
             <Button icon="bolt" onClick={() => run("AC on at House 14", () => api.consoleEvent("ac", "h14", 120))}>AC on at House 14 (2 h)</Button>
             <Button icon="plug" onClick={() => run("Grid outage", () => api.consoleEvent("outage", undefined, 30))}>Grid outage (30 min)</Button>
-            <Button icon="ban" kind="danger" onClick={() => run("House 14 tries a ₹40 bid", () => api.consoleEvent("bad_bid", "h14"))}>House 14 tries a ₹40 bid</Button>
+            <Button icon="check" kind="tinted" onClick={() => run("Asking House 14's owner (check the phone)", () => api.consoleEvent("ask_owner", "h14"))}>Ask House 14's owner for a big buy</Button>
+            <Button icon="ban" kind="danger" onClick={() => run("Impostor “House 16” tries to sell at ₹40", () => api.consoleEvent("impostor"))}>Impostor “House 16” sells at ₹40</Button>
             <Button icon="reset" onClick={() => run("Day reset", api.reset)}>Reset the day</Button>
           </div>
         </Card>

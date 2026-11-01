@@ -100,25 +100,27 @@ type Toast = { id: number; title: string; body?: string; tone: "ok" | "bad" | "i
 let push: (t: Omit<Toast, "id">) => void = () => {};
 export const toast = (title: string, body?: string, tone: Toast["tone"] = "info") => push({ title, body, tone });
 
+/** Toasts float in the middle of the screen, see-through and click-through, so nothing behind them is
+ *  ever blocked. A repeat of the same title replaces the old one instead of stacking. */
 export function Toaster() {
   const [items, setItems] = useState<Toast[]>([]);
   useEffect(() => {
     let n = 0;
     push = (t) => {
       const id = ++n;
-      setItems((xs) => [...xs.slice(-3), { ...t, id }]);
-      setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 4500);
+      setItems((xs) => [...xs.filter((x) => x.title !== t.title).slice(-2), { ...t, id }]);
+      setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 3500);
     };
   }, []);
   const dot = { ok: "bg-leaf", bad: "bg-alert", info: "bg-sun" };
   return (
-    <div className="pointer-events-none fixed right-5 top-5 z-50 flex w-80 flex-col gap-2">
+    <div className="pointer-events-none fixed left-1/2 top-1/2 z-50 flex w-[min(420px,90vw)] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
       {items.map((t) => (
-        <div key={t.id} className="rise card flex gap-3 px-4 py-3">
+        <div key={t.id} className="rise flex max-w-full gap-2.5 rounded-2xl bg-white/55 px-4 py-2.5 shadow-sm backdrop-blur-md">
           <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot[t.tone]}`} />
           <div className="min-w-0">
             <p className="text-sm font-semibold">{t.title}</p>
-            {t.body && <p className="text-[13px] text-ink-2">{t.body}</p>}
+            {t.body && <p className="line-clamp-2 text-[12px] text-ink-2">{t.body}</p>}
           </div>
         </div>
       ))}

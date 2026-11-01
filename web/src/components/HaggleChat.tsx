@@ -30,7 +30,7 @@ export function HaggleChat() {
       </ul>
       {deal && (
         <p className="mt-2 rounded-lg bg-leaf-soft px-2.5 py-1.5 font-semibold text-leaf-ink">
-          Deal {short(deal.seller)}→{short(deal.buyer)} · {deal.kwh.toFixed(2)} kWh · {rupees(deal.price)}
+          ✓ Deal {short(deal.seller)}→{short(deal.buyer)} · {deal.kwh.toFixed(2)} kWh · {rupees(deal.price)} · within both owners' rules
         </p>
       )}
     </div>

@@ -4,14 +4,19 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+import uuid
+
 from hizashi_shared import blocks, config, street
 from hizashi_shared import events as ev
-from hizashi_shared.models import HOUSES, Event
+from hizashi_shared.models import HOUSES, Event, PlanWindow
 
 from .. import attacks, bus, clock, schedules
 from .. import state as hub_state
 from ..sim import weather
+from ..wallet import approvals
+from ..wallet import mandate as mandates
 from .houses import _save as save_house
+from .market import enter_market
 
 router = APIRouter(prefix="/console", tags=["console"])
 
@@ -26,7 +31,7 @@ class ResetBody(BaseModel):
 
 
 class ConsoleEventBody(BaseModel):
-    type: Literal["cloud", "outage", "ac", "guests", "away", "bad_bid", "rogue_seller", "collusion"]
+    type: Literal["cloud", "outage", "ac", "guests", "away", "ask_owner", "impostor"]
     house: str | None = None
     minutes: int | None = None
 
@@ -98,20 +103,21 @@ def _back_to_onboarding(request: Request, now) -> None:
 
 
 SIM_TYPES = ("cloud", "outage", "ac", "guests", "away")
-NEEDS_HOUSE = ("ac", "guests", "away")
-COLLUDERS = ("h16", "h18")
-COLLUSION_PRICE = 5.60
+NEEDS_HOUSE = ("ac", "guests", "away", "ask_owner")
+ASK_BLOCKS = 4                 # the plan the owner is asked about covers the next hour
 
 
 @router.post("/events")
 async def post_event(request: Request, body: ConsoleEventBody) -> dict:
-    """cloud / outage / ac / guests / away change the sim; bad_bid etc. drive the attack demos."""
+    """cloud / outage / ac / guests / away change the sim; ask_owner sends the owner a plan that is
+    over their no-ask limit; impostor runs the attack demo."""
     now = clock.get().now
     if body.house is not None and body.house not in HOUSES:
         raise HTTPException(404, f"unknown house {body.house}")
+    if body.type in NEEDS_HOUSE and body.house is None:
+        raise HTTPException(422, f"{body.type} needs a house")
+    conn = request.app.state.db
     if body.type in SIM_TYPES:
-        if body.type in NEEDS_HOUSE and body.house is None:
-            raise HTTPException(422, f"{body.type} needs a house")
         e = request.app.state.sim.events.add(body.type, body.house, now, body.minutes)
         data = {"event": e.model_dump(mode="json")}
         bus.publish(Event(type=ev.SIM_EVENT, sim_time=now, house=e.house, data=data))
@@ -119,15 +125,29 @@ async def post_event(request: Request, body: ConsoleEventBody) -> dict:
             bus.publish(Event(type=ev.GRID_OUTAGE, sim_time=now,
                               data={"active": True, "start": e.start.isoformat(), "end": e.end.isoformat()}))
         return {"status": "ok", **data}
-    if body.type == "bad_bid":
-        house = body.house or "h14"
-        bus.publish(Event(type=ev.CONSOLE_COMMAND, sim_time=now, house=house, data={"cmd": "bad_bid", "price": 40}))
-        return {"status": "ok", "sent_to": house}
-    if body.type == "rogue_seller":
-        c = clock.get()
-        return await attacks.fake_seller(hub_state.get().houses, c.block_states, now, target=body.house or "h14")
-    # collusion: two sellers agree to hold one ask; the guard catches them after a few blocks
-    for house in COLLUDERS:
-        bus.publish(Event(type=ev.CONSOLE_COMMAND, sim_time=now, house=house,
-                          data={"cmd": "collude", "price": COLLUSION_PRICE, "blocks": 6}))
-    return {"status": "ok", "sent_to": list(COLLUDERS), "price": COLLUSION_PRICE}
+    if body.type == "ask_owner":
+        return ask_owner(conn, body.house, now)  # type: ignore[arg-type]
+    # impostor: claims to be House 16, sells at ₹40, signed with its own key; the market's door
+    # checks the signature against House 16's wallet and blacklists the key.
+    key = attacks.impostor_key()
+    ref = attacks.next_open_block(clock.get().block_states, now)
+    offer = attacks.impostor_ask("h16", ref, key)
+    refusal = enter_market(conn, offer, attacks.pubkey(key))
+    return {"status": "refused" if refusal else "let in", "reason": refusal}
+
+
+def ask_owner(conn, house: str, now) -> dict:
+    """A one-hour buy plan worth more than the owner's no-ask limit: the wallet holds the house's buys
+    in that hour until the owner taps Approve (or Decline) on the phone."""
+    c = clock.get()
+    # The next open block; before or after trading hours, the nearest trading hour (still a real ask).
+    first = min(max(attacks.next_open_block(c.block_states, now).index, blocks.TRADABLE[0]),
+                blocks.TRADABLE[-1] - ASK_BLOCKS + 1)
+    last = first + ASK_BLOCKS - 1
+    limit = mandates.current(conn, house).approve_above
+    kwh = round(limit / config.EXPECTED_P2P_PRICE + 1.0, 1)
+    window = PlanWindow(plan_id=f"ask-{uuid.uuid4().hex[:8]}", house=house, side="buy", day=c.day,  # type: ignore[arg-type]
+                        first_index=first, last_index=last, kwh=kwh, expected_price=config.EXPECTED_P2P_PRICE,
+                        expected_value=round(kwh * config.EXPECTED_P2P_PRICE, 2), status="pending")
+    approvals.save_pending_plan(conn, window, now)
+    return {"status": "asked", "house": house, "plan": window.model_dump(mode="json")}
